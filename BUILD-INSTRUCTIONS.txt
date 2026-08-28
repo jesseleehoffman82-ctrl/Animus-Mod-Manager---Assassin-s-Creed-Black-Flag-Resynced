@@ -1,0 +1,50 @@
+# Building Animus Mod Manager 0.1.2 Beta
+
+This source package corresponds to the public Windows x64 release of Animus
+Mod Manager 0.1.2 Beta.
+
+## Requirements
+
+- Windows 10 or Windows 11 x64
+- .NET 10 SDK x64
+- Python 3.14 x64
+- Microsoft Edge WebView2 SDK 1.0.3856.49
+
+## Native desktop host
+
+1. Place these official WebView2 SDK files under `desktop/lib`:
+   - `Microsoft.Web.WebView2.Core.dll`
+   - `Microsoft.Web.WebView2.WinForms.dll`
+   - `runtimes/win-x64/native/WebView2Loader.dll`
+2. From the source-package root, run:
+
+   `dotnet publish desktop/AnimusModManager.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false -o build`
+
+The result requires Microsoft .NET 10 Desktop Runtime x64. The application
+host launches the local Python RPC backend and displays the HTML/CSS/JavaScript
+interface through Microsoft Edge WebView2.
+
+## Python backend tests
+
+Install the development dependencies:
+
+`py -3.14 -m pip install -r tools/requirements.txt`
+
+Run the regression tests from the source-package root:
+
+`py -3.14 tools/test_import_nexus_zip.py`
+
+`py -3.14 tools/test_loader_loose.py`
+
+`py -3.14 tools/test_loader_outfits.py`
+
+`py -3.14 tools/test_loader.py`
+
+`py -3.14 tools/test_nexus_updates.py`
+
+## Distribution design
+
+The public application package adds official redistributable components that
+are intentionally not duplicated in this source-only archive: embedded Python,
+7-Zip, DirectXTex and the WebView2 SDK assemblies. Animus patches selected game
+files on disk and does not inject code into the running game process.

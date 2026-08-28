@@ -1,0 +1,19 @@
+ANIMUS MOD MANAGER - SECURITY AND PACKAGE NOTES
+
+Animus Mod Manager is a standalone Windows utility for Assassin's Creed IV:
+Black Flag Resynced. This portable package is not password protected and does
+not contain nested archives or personal mod data.
+
+The application uses a native .NET desktop interface with Microsoft WebView2
+and an embedded Python runtime. It also bundles the official 7-Zip command-line
+extractor for ZIP/7Z/RAR mod packages and DirectXTex texconv for supported image
+conversion. These legitimate executable and DLL files are required for the
+documented manager features.
+
+Animus does not inject code into the running game process or modify game
+memory. When directed by the user, it deploys conventional loose-file mods or
+patches supported game archive data while retaining the information needed to
+disable or restore managed content.
+
+Version: 0.1.2-beta
+Publisher: Animus Mod Manager Project

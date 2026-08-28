@@ -1,0 +1,44 @@
+# Build outputs and generated releases
+bin/
+obj/
+build/
+release/
+desktop/build-check/
+desktop/bin/
+desktop/obj/
+.release-cache/
+.release-tools/
+.dotnet-cli/
+
+# Compiled third-party dependencies restored by the builder
+desktop/lib/*.dll
+desktop/lib/**/*.dll
+tools/third_party/**/*.exe
+tools/third_party/**/*.dll
+
+# Embedded runtimes and Python caches
+runtime/
+__pycache__/
+*.py[cod]
+*.pyd
+
+# User data, managed mods, backups, and local logs
+mods/
+backups/
+*.log
+settings.json
+
+# Credentials and local environment files
+.env
+.env.*
+*.key
+*.pem
+*.pfx
+*.p12
+
+# IDE and OS files
+.vs/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

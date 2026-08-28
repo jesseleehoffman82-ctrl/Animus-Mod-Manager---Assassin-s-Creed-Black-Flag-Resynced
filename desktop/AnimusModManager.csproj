@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PlatformTarget>x64</PlatformTarget>
+    <AssemblyName>AnimusModManager</AssemblyName>
+    <RootNamespace>AnimusModManager</RootNamespace>
+    <ApplicationIcon>assets\animus.ico</ApplicationIcon>
+    <Product>Animus Mod Manager</Product>
+    <Company>Animus Mod Manager Project</Company>
+    <Authors>Animus Mod Manager Project</Authors>
+    <Description>Mod, outfit, weapon, and crew texture manager for Assassin's Creed IV: Black Flag Resynced.</Description>
+    <Copyright>Copyright © 2026 Animus Mod Manager Project</Copyright>
+    <Version>0.1.2-beta</Version>
+    <AssemblyVersion>0.1.2.0</AssemblyVersion>
+    <FileVersion>0.1.2.0</FileVersion>
+    <ProductVersion>0.1.2-beta</ProductVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Microsoft.Web.WebView2.Core">
+      <HintPath>lib\Microsoft.Web.WebView2.Core.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="Microsoft.Web.WebView2.WinForms">
+      <HintPath>lib\Microsoft.Web.WebView2.WinForms.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Content Include="lib\runtimes\win-x64\native\WebView2Loader.dll">
+      <Link>WebView2Loader.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+</Project>

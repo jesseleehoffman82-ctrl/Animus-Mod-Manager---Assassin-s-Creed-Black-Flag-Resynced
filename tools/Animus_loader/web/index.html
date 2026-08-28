@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
+  <title>Animus Mod Manager</title>
+  <link rel="stylesheet" href="app.css?v=20260824-3">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="titlebar" data-pywebview-drag-region>
+      <div class="brand" data-pywebview-drag-region>
+        <div class="brand-mark" aria-hidden="true">
+          <img src="assets/resynced-insignia.png" alt="">
+        </div>
+        <div class="game-title"><span>ASSASSIN'S CREED</span><strong>BLACK FLAG</strong><em>RESYNCED</em></div>
+        <div class="brand-divider"></div>
+        <div class="product-title"><h1>ANIMUS MOD MANAGER</h1></div>
+      </div>
+      <div class="window-controls">
+        <button data-window="minimize" aria-label="Minimize">—</button>
+        <button data-window="maximize" aria-label="Maximize">□</button>
+        <button data-window="close" aria-label="Close">×</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="game-panel frame-corners">
+        <div class="game-row">
+          <input id="game-path" type="text" spellcheck="false" readonly aria-label="Game folder" placeholder="Game folder path">
+          <button class="button" id="browse-button">BROWSE</button>
+          <button class="button" id="detect-button">DETECT</button>
+          <div class="game-status" id="game-status"><i></i><span>CHECKING</span></div>
+        </div>
+      </section>
+
+      <section class="workspace frame-corners">
+        <div class="workspace-head">
+          <nav class="tabs" aria-label="Manager sections">
+            <button class="tab active" data-tab="mods">MODS</button>
+            <button class="tab" data-tab="outfits">OUTFITS</button>
+            <button class="tab" data-tab="weapons">WEAPONS</button>
+            <button class="tab" data-tab="crew">CREW</button>
+          </nav>
+          <div class="nexus-tools">
+            <button class="button compact nexus-connect" id="connect-nexus-button">
+              <i></i><span id="nexus-connect-label">CONNECT NEXUS</span>
+            </button>
+            <button class="button compact launch-game" id="launch-game-button">
+              <span class="launch-icon">▷</span><span id="launch-game-label">LAUNCH GAME</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <button class="button primary" id="install-button"><span class="button-icon">▷</span><span id="install-label">INSTALL MOD</span></button>
+          <button class="button danger-subtle" id="uninstall-button" disabled><span class="button-icon">♲</span><span id="uninstall-label">UNINSTALL MOD</span></button>
+          <button class="button refresh" id="refresh-button"><span>↻</span> REFRESH</button>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead id="table-head"></thead>
+            <tbody id="table-body"></tbody>
+          </table>
+          <div class="empty-state" id="empty-state" hidden></div>
+        </div>
+      </section>
+
+      <section class="activity frame-corners">
+        <div class="section-title"><span>ACTIVITY</span><button class="button tiny" id="clear-log-button">CLEAR</button></div>
+        <div class="log" id="activity-log" role="log" aria-live="polite"></div>
+      </section>
+    </main>
+
+    <footer><span class="footer-mark">⌘</span><span>ANIMUS MOD MANAGER</span><span>v0.1.2 BETA</span></footer>
+  </div>
+
+  <div class="context-menu" id="context-menu" hidden>
+    <button data-action="update" id="update-menu-action">↻ <span>Update Mod</span></button>
+    <button data-action="rename">✎ <span>Rename</span></button>
+    <button data-action="open" id="open-menu-action">□ <span>Open Mod Folder</span></button>
+    <button data-action="nexus" id="nexus-menu-action">↗ <span>Visit on Nexus</span></button>
+    <button data-action="details">ⓘ <span>View Details</span></button>
+    <button data-action="uninstall" id="uninstall-menu-action" class="danger">♲ <span>Uninstall Mod</span></button>
+  </div>
+
+  <dialog id="details-dialog">
+    <div class="dialog-head"><h2>MOD DETAILS</h2><button id="dialog-close">×</button></div>
+    <div id="details-content"></div>
+  </dialog>
+
+  <dialog id="rename-dialog" class="rename-dialog">
+    <form id="rename-form">
+      <div class="dialog-head">
+        <h2>RENAME MANAGED ITEM</h2>
+        <button type="button" id="rename-close" aria-label="Close">×</button>
+      </div>
+      <div class="rename-body">
+        <label for="rename-input">DISPLAY NAME</label>
+        <input id="rename-input" type="text" maxlength="160" autocomplete="off" spellcheck="false">
+        <p id="rename-error" class="rename-error" aria-live="polite"></p>
+        <p class="rename-note">This only changes the name shown in Animus Mod Manager. Managed files and deployment data remain linked.</p>
+      </div>
+      <div class="dialog-actions">
+        <button type="button" class="button" id="rename-cancel">CANCEL</button>
+        <button type="submit" class="button primary">SAVE NAME</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="app.js?v=20260824-24"></script>
+</body>
+</html>

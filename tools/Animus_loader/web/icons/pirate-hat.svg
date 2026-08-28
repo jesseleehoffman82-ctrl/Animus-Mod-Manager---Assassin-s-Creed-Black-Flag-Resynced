@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <defs>
+    <linearGradient id="silver" x1="5" y1="3" x2="20" y2="21" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.3" stop-color="#d9dcdf"/>
+      <stop offset="0.7" stop-color="#747c83"/>
+      <stop offset="1" stop-color="#f4f5f5"/>
+    </linearGradient>
+  </defs>
+  <!-- Tall, unmistakable hat crown in a slight side view. -->
+  <path d="M5.2 15.2c.5-6.8 2.8-10.6 8.4-10.6 3.7 0 5.4 3.3 5.1 9.8-4.5 1.8-9 2.1-13.5.8Z" fill="url(#silver)" stroke="#ffffff" stroke-width=".8" stroke-linejoin="round"/>
+  <path d="M6.3 12.1c3.7 1.3 7.8 1.2 12.3-.3" fill="none" stroke="#666e74" stroke-width=".8" stroke-linecap="round"/>
+  <!-- Asymmetric upturned brim avoids the moustache silhouette. -->
+  <path d="M2.2 15c4.9 1.5 9.3 1 13.2-1.6 1.7 1.1 3.8 1.2 6.4.3-2.2 5.1-6.5 7-12.9 5.7-3.3-.6-5.5-2.1-6.7-4.4Z" fill="#aab0b5" stroke="#ffffff" stroke-width=".9" stroke-linejoin="round"/>
+  <path d="M3.8 15.5c4.6 2 9.3 1.5 14-1.4M8.2 18.8c3.9.4 7.2-.7 9.8-3.3" fill="none" stroke="#616970" stroke-width=".75" stroke-linecap="round"/>
+  <!-- Long feather makes the pirate silhouette legible at 20px. -->
+  <path d="M15.5 7.2c2.1-3.9 4.3-5.1 6.1-4.4-.2 3.3-2.3 6-6.3 8.2l.2-3.8Z" fill="url(#silver)" stroke="#ffffff" stroke-width=".65" stroke-linejoin="round"/>
+  <path d="m15.4 10.3 5.3-6.6" stroke="#676f75" stroke-width=".55" stroke-linecap="round"/>
+</svg>
