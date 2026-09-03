@@ -39,8 +39,12 @@ and do not want to depend on Outfit Workshop for installation.
   managed copy while preserving supported metadata.
 - Open managed folders, view details, link a Nexus page and visit it directly.
 - Game-folder detection, manual browsing and built-in game launch button.
-- Checks common `version.dll` proxy combinations and warns when automatic
-  compatibility cannot be handled safely.
+- Manages compatible `version.dll` combinations instead of silently
+  overwriting them. It shares Ultimate ASI Loader copies, supports its
+  `versionHooked.dll` chain, and applies documented secondary aliases such as
+  Walk By Default's `wininet.dll` rule in either installation order.
+- Blocks two genuinely incompatible custom proxies without changing the game
+  folder and explains why they cannot safely run together.
 - Compact native Windows interface with an activity log and an unobtrusive
   in-game **MODS & OUTFITS LOADED** confirmation.
 

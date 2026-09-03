@@ -175,7 +175,12 @@ def inspect_proxy_dll(data: bytes) -> dict:
     result["valid_pe"] = True
     result["machine"] = f"0x{machine:04X}"
     result["architecture"] = {0x014C: "x86", 0x8664: "x64", 0xAA64: "arm64"}.get(machine, "unknown")
-    if b"Ultimate-ASI-Loader" in data or b"Ultimate ASI Loader" in data:
+    if any(marker in data for marker in (
+        b"Ultimate-ASI-Loader",
+        b"Ultimate ASI Loader",
+        b"IsUltimateASILoader",
+        b"github.com/ThirteenAG/Ultimate-ASI-Loader",
+    )):
         result["kind"] = "ultimate-asi-loader"
     else:
         result["kind"] = "proxy-dll"
@@ -339,12 +344,25 @@ class Loader:
             # when every useful file shares it; all remaining paths stay intact.
             first_parts = {path.parts[0] for _, path in entries}
             strip_wrapper = len(first_parts) == 1 and all(len(path.parts) > 1 for _, path in entries)
+            if strip_wrapper:
+                entries = [(item, Path(*path.parts[1:])) for item, path in entries]
+            selected_root = self._select_resynced_option(entries)
+            if selected_root:
+                entries = [
+                    (item, path) for item, path in entries
+                    if len(path.parts) == 1 or path.parts[0] == selected_root
+                ]
+
+            def deployment_path(path: Path) -> Path:
+                if selected_root and len(path.parts) > 1 and path.parts[0] == selected_root:
+                    return Path(*path.parts[1:])
+                return path
 
             installable = []
             documents = []
             unknown = []
             for item, path in entries:
-                relative = Path(*path.parts[1:]) if strip_wrapper else path
+                relative = deployment_path(path)
                 suffix = relative.suffix.lower()
                 if suffix in blocked_exts:
                     raise LoaderError(
@@ -387,6 +405,7 @@ class Loader:
                     readme_text = archive.read(item).decode("utf-8", errors="replace")
                     break
             name, version = self._loose_archive_metadata(archive_source.stem, readme_text)
+            nexus_mod_id = self._nexus_archive_mod_id(archive_source.stem)
             safe_name = re.sub(r"[^A-Za-z0-9._-]+", "-", name).strip("-.") or "Imported-Mod"
             target = self.packages_dir / f"{safe_name}.jmod"
             temporary = target.with_suffix(".tmp.jmod")
@@ -401,6 +420,16 @@ class Loader:
                 "source_archive": archive_source.name,
                 "targets": [],
             }
+            if nexus_mod_id is not None:
+                manifest["nexus"] = {"game_id": 9408, "mod_id": nexus_mod_id}
+            if selected_root:
+                manifest["selected_archive_root"] = selected_root
+            chain_alias = self._proxy_chain_alias(readme_text, nexus_mod_id)
+            if chain_alias:
+                manifest["proxy_chain"] = {
+                    "secondary": chain_alias,
+                    "source": "documented-install-rule",
+                }
             with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_DEFLATED) as output:
                 for index, (item, relative) in enumerate(installable):
                     resource = f"resources/{index:03d}-{relative.name}"
@@ -424,7 +453,7 @@ class Loader:
         #   <mod id> <version> <UTC timestamp> <download token>
         # Remove that transport metadata before showing the package in the UI.
         nexus_suffix = re.search(
-            r"(?i)\s+\d+\s+v?(\d+(?:\.\d+)+(?:\s*(?:alpha|beta))?)"
+            r"(?i)\s+\d+\s+v?(\d+(?:\.\d+)*(?:\s*(?:alpha|beta))?)"
             r"\s+\d{4}-\d{2}-\d{2}T[^ ]+\s+[A-Za-z0-9]+$",
             fallback,
         )
@@ -445,6 +474,63 @@ class Loader:
             if filename_version:
                 version = filename_version.group(1).strip()
         return name, version
+
+    @staticmethod
+    def _select_resynced_option(entries: list[tuple[object, Path]]) -> str | None:
+        """Choose an explicit Resynced/64-bit option from a universal archive."""
+        roots = sorted({path.parts[0] for _, path in entries if len(path.parts) > 1})
+        if len(roots) < 2:
+            return None
+
+        def score(root: str) -> int:
+            label = root.lower().replace("_", " ").replace("-", " ")
+            value = 0
+            if "resynced" in label:
+                value += 100
+            if "64 bit" in label or "x64" in label:
+                value += 30
+            if "dx12" in label or "directx 12" in label:
+                value += 20
+            if "32 bit" in label or "standard" in label or "original" in label:
+                value -= 100
+            return value
+
+        ranked = sorted(((score(root), root) for root in roots), reverse=True)
+        if ranked[0][0] <= 0:
+            return None
+        if len(ranked) > 1 and ranked[0][0] == ranked[1][0]:
+            return None
+        return ranked[0][1]
+
+    @staticmethod
+    def _nexus_archive_mod_id(fallback: str) -> int | None:
+        """Read Nexus' trailing mod id from a downloaded archive filename."""
+        match = re.search(
+            r"(?i)\s+(\d+)\s+v?\d+(?:\.\d+)*(?:\s*(?:alpha|beta))?"
+            r"\s+\d{4}-\d{2}-\d{2}T[^ ]+\s+[A-Za-z0-9]+$",
+            fallback,
+        )
+        return int(match.group(1)) if match else None
+
+    @staticmethod
+    def _proxy_chain_alias(readme: str, nexus_mod_id: int | None) -> str | None:
+        """Return a documented secondary proxy filename, never a guess.
+
+        Proxy DLLs are executable code; renaming one arbitrarily is unsafe.
+        A chain is enabled only when an included readme explicitly documents
+        it, or when a reviewed Nexus-specific rule records the same published
+        installation instruction.
+        """
+        documented = re.search(
+            r"(?is)rename.{0,80}(?:existing|old|current).{0,40}version\.dll"
+            r".{0,80}(wininet\.dll|versionhooked\.dll)",
+            readme or "",
+        )
+        if documented:
+            return documented.group(1).lower()
+        # Nexus mod 428 explicitly instructs users to rename an existing
+        # version.dll to wininet.dll so its proxy can load it.
+        return "wininet.dll" if nexus_mod_id == 428 else None
 
     def _manifest_to_package(self, manifest: dict, archive) -> Package:
         if manifest.get("format") != FORMAT:
@@ -617,9 +703,19 @@ class Loader:
             for target in pkg.targets:
                 if target.mode == "loose-file" and target.dest:
                     kind = None
+                    chain_alias = None
                     if Path(target.dest).as_posix().lower() == "version.dll":
                         kind = inspect_proxy_dll(target.replacement).get("kind")
-                    claimed.setdefault(target.dest, []).append({"name": pkg.name, "dll_kind": kind})
+                        chain = pkg.manifest.get("proxy_chain")
+                        if isinstance(chain, dict):
+                            candidate = Path(str(chain.get("secondary", ""))).as_posix().lower()
+                            if candidate in {"wininet.dll", "versionhooked.dll"}:
+                                chain_alias = candidate
+                    claimed.setdefault(target.dest, []).append({
+                        "name": pkg.name,
+                        "dll_kind": kind,
+                        "chain_alias": chain_alias,
+                    })
         conflicts = []
         for dest, owners in claimed.items():
             if len(owners) <= 1:
@@ -628,6 +724,8 @@ class Loader:
                 loaders = [item for item in owners if item["dll_kind"] == "ultimate-asi-loader"]
                 custom = [item for item in owners if item["dll_kind"] != "ultimate-asi-loader"]
                 if loaders and len(custom) <= 1:
+                    continue
+                if len(owners) == 2 and any(item.get("chain_alias") for item in owners):
                     continue
             conflicts.append({"dest": dest, "names": [item["name"] for item in owners]})
         return conflicts
@@ -923,6 +1021,7 @@ class Loader:
         hook_info = inspect_proxy_dll(hook_path.read_bytes()) if hook_path.is_file() else None
         owners: list[str] = []
         chained: list[str] = []
+        chain_files: list[str] = []
         for record in self._load_state():
             if not record.enabled:
                 continue
@@ -932,14 +1031,21 @@ class Loader:
                 dest = str(backup.get("dest", "")).replace("\\", "/").lower()
                 if dest == "version.dll":
                     owners.append(record.name)
-                elif dest == "versionhooked.dll":
+                elif backup.get("chain_loader_dest") and dest:
                     chained.append(record.name)
+                    chain_files.append(dest)
+        chain_files = sorted(set(chain_files))
+        hook_present = any((self.game_dir / name).is_file() for name in chain_files)
+        if not chain_files and hook_path.is_file():
+            chain_files = ["versionhooked.dll"]
+            hook_present = True
         info.update({
-            "hook_present": hook_path.is_file(),
+            "hook_present": hook_present,
             "hook": hook_info,
+            "chain_files": chain_files,
             "owners": owners,
             "chained": chained,
-            "compatible": info.get("kind") == "ultimate-asi-loader" or not chained,
+            "compatible": not chained or hook_present,
         })
         return info
 
@@ -1044,6 +1150,23 @@ class Loader:
                 if (target.mode == "loose-file" and target.dest and
                         Path(target.dest).as_posix().lower() == destination.lower()):
                     return target.replacement
+        return None
+
+    def _package_proxy_chain_alias(self, package_name: str) -> str | None:
+        """Return a package's explicitly declared secondary proxy filename."""
+        for path in self.discover_packages():
+            try:
+                package = self.read_package(path)
+            except LoaderError:
+                continue
+            if package.name != package_name:
+                continue
+            chain = package.manifest.get("proxy_chain")
+            alias = chain.get("secondary") if isinstance(chain, dict) else None
+            normalized = Path(str(alias or "")).as_posix().lower()
+            if normalized in {"wininet.dll", "versionhooked.dll"}:
+                return normalized
+            return None
         return None
 
     def _managed_owner_for_bytes(self, destination: str, content: bytes) -> tuple[InstallRecord, dict] | None:
@@ -1182,9 +1305,77 @@ class Loader:
                 "compatibility": "asi-loader-with-preserved-proxy",
             }
 
+        # Some custom proxies explicitly support loading a second proxy under
+        # another DLL name. Never invent this alias: it comes from a reviewed
+        # Nexus rule or the package's own install documentation.
+        managed = self._managed_owner_for_bytes("version.dll", existing)
+        incoming_chain = pkg.manifest.get("proxy_chain")
+        incoming_alias = (
+            Path(str(incoming_chain.get("secondary", ""))).as_posix().lower()
+            if isinstance(incoming_chain, dict) else ""
+        )
+        if incoming_alias not in {"wininet.dll", "versionhooked.dll"}:
+            incoming_alias = ""
+
+        existing_alias = self._package_proxy_chain_alias(managed[0].name) if managed else None
+        if incoming_alias:
+            alias_path = self.game_dir / incoming_alias
+            if alias_path.is_file():
+                raise LoaderError(
+                    f"{pkg.name}: cannot create the documented DLL chain because "
+                    f"{incoming_alias} is already occupied."
+                )
+            alias_path.write_bytes(existing)
+            if managed:
+                owner, old_entry = managed
+                migrated = dict(old_entry)
+                migrated.update({
+                    "file": incoming_alias, "dest": incoming_alias,
+                    "requested_dest": "version.dll", "backup": None,
+                    "original_hex": None,
+                    "installed_sha256": existing_info["sha256"],
+                    "dll_kind": existing_info["kind"],
+                    "chain_loader_dest": "version.dll",
+                    "chain_loader_sha256": incoming_hash,
+                    "compatibility": f"chained-as-{incoming_alias}",
+                })
+                self._save_migrated_record(owner, migrated)
+                backup_path = None
+                external_hook = None
+            else:
+                backup_path = self._write_backup(dest_path, pkg, existing)
+                external_hook = incoming_alias
+            dest_path.write_bytes(incoming)
+            return {
+                "mode": "loose-file", "file": "version.dll", "dest": "version.dll",
+                "backup": str(backup_path) if backup_path else None,
+                "original_hex": None,
+                "installed_sha256": incoming_hash, "dll_kind": incoming_info["kind"],
+                "external_chain_hook": external_hook,
+                "external_chain_sha256": existing_info["sha256"] if external_hook else None,
+                "compatibility": f"primary-with-{incoming_alias}-chain",
+            }
+
+        if existing_alias and managed:
+            alias_path = self.game_dir / existing_alias
+            if alias_path.is_file():
+                raise LoaderError(
+                    f"{pkg.name}: cannot join the existing DLL chain because "
+                    f"{existing_alias} is already occupied."
+                )
+            alias_path.write_bytes(incoming)
+            return {
+                "mode": "loose-file", "file": existing_alias, "dest": existing_alias,
+                "requested_dest": "version.dll", "backup": None, "original_hex": None,
+                "installed_sha256": incoming_hash, "dll_kind": incoming_info["kind"],
+                "chain_loader_dest": "version.dll",
+                "chain_loader_sha256": existing_info["sha256"],
+                "compatibility": f"chained-as-{existing_alias}",
+            }
+
         raise LoaderError(
-            f"{pkg.name}: version.dll conflicts with another unrecognized proxy DLL. "
-            "The manager will not overwrite or chain two unknown hook implementations."
+            f"{pkg.name}: version.dll conflicts with another custom proxy DLL. "
+            "Neither mod declares a safe chaining filename, so Animus left both files unchanged."
         )
 
     def _apply_loose_file(self, pkg: Package, target: Target) -> list[dict]:

@@ -67,6 +67,17 @@ class DesktopRpc:
             "message": message,
         })
 
+    def _log_dll_compatibility(self, entries: list[dict]) -> None:
+        for entry in entries:
+            compatibility = str(entry.get("compatibility") or "")
+            if not compatibility:
+                continue
+            destination = str(entry.get("dest") or "version.dll")
+            self.log(
+                f"DLL compatibility: {compatibility.replace('-', ' ')} ({destination}).",
+                "ok",
+            )
+
     def _find_package(self, name: str) -> Path | None:
         for path in self.loader.discover_packages():
             try:
@@ -248,6 +259,7 @@ class DesktopRpc:
             source = Path(args[0])
             target, package, converted = self.loader.import_package(source)
             backups = self.loader.apply(target, priority=0)
+            self._log_dll_compatibility(backups)
             if converted:
                 self.log(
                     f"Imported ordinary Nexus archive as a managed loose-file mod ({len(package.targets)} file(s)).",
@@ -276,6 +288,7 @@ class DesktopRpc:
                     raise LoaderError(f"Could not find package for '{name}'")
                 package = self.loader.read_package(path)
                 backups = self.loader.apply(path, priority=0)
+                self._log_dll_compatibility(backups)
                 self.log(f"Enabled '{package.name}' — {len(backups)} target(s) patched", "ok")
             return {"ok": True}, self.state()
 
@@ -296,6 +309,7 @@ class DesktopRpc:
             if old_path and old_path.is_file() and old_path.resolve() != target.resolve():
                 old_path.unlink()
             backups = self.loader.apply(target, priority=0)
+            self._log_dll_compatibility(backups)
             self.log(
                 f"Updated '{old_name}' with '{package.name} v{package.version}' — "
                 f"restored {len(restored)} old and patched {len(backups)} target(s).",

@@ -10,6 +10,16 @@ from pathlib import Path
 from Animus_loader.core import Loader, LoaderError
 
 
+def fake_dll(marker: bytes) -> bytes:
+    data = bytearray(512)
+    data[:2] = b"MZ"
+    data[0x3C:0x40] = (0x80).to_bytes(4, "little")
+    data[0x80:0x84] = b"PE\0\0"
+    data[0x84:0x86] = (0x8664).to_bytes(2, "little")
+    data[0x100:0x100 + len(marker)] = marker
+    return bytes(data)
+
+
 def main() -> None:
     with tempfile.TemporaryDirectory() as raw:
         root = Path(raw)
@@ -100,6 +110,41 @@ def main() -> None:
         assert (videos / "HUB_BootFlow_Intro.webm").read_bytes() == b"blank-intro"
         loader.remove(tar_package.name)
         assert not (videos / "HUB_BootFlow_Intro.webm").exists()
+
+        # Universal downloads can contain mutually exclusive original-game
+        # and Resynced payload folders. Select and flatten only the explicit
+        # Resynced x64/DX12 option rather than copying both folders verbatim.
+        universal = root / "Walk By Default 428 3 2026-08-25T04-28Z AbCd123.zip"
+        with zipfile.ZipFile(universal, "w") as archive:
+            archive.writestr(
+                "1. Steam and Ubisoft Connect (Standard 32-bit)/version.dll",
+                fake_dll(b"32 BIT OPTION"),
+            )
+            archive.writestr(
+                "2. Black Flag Resynced (64-bit DX12)/version.dll",
+                fake_dll(b"RESYNCED OPTION"),
+            )
+            archive.writestr(
+                "2. Black Flag Resynced (64-bit DX12)/walking.conf",
+                b"enabled=true\n",
+            )
+            archive.writestr(
+                "README.txt",
+                "Rename the existing version.dll file to wininet.dll before installing.\n",
+            )
+        universal_managed, universal_package, converted = loader.import_package(universal)
+        assert converted
+        assert universal_package.version == "3"
+        assert universal_package.manifest["nexus"]["mod_id"] == 428
+        assert universal_package.manifest["proxy_chain"]["secondary"] == "wininet.dll"
+        assert universal_package.manifest["selected_archive_root"].startswith("2.")
+        assert {target.dest for target in universal_package.targets} == {
+            "version.dll", "walking.conf",
+        }
+        assert b"RESYNCED OPTION" in next(
+            target.replacement for target in universal_package.targets
+            if target.dest == "version.dll"
+        )
 
         blocked = root / "unsafe.zip"
         with zipfile.ZipFile(blocked, "w") as archive:

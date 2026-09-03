@@ -9,6 +9,10 @@
 - Corrected the Black Flag Resynced Nexus game identifier to 9408.
 - Added release auditing that rejects legacy Nexus credentials, authentication
   endpoints, or direct-download code before a Nexus package can be created.
+- Added reversible multi-proxy DLL chaining for documented secondary aliases,
+  including Walk By Default's `version.dll` → `wininet.dll` compatibility rule.
+- Made supported custom-proxy chaining independent of installation order and
+  improved Ultimate ASI Loader identification.
 
 ## 0.1.4 Beta — 2026-08-29
 

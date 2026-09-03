@@ -27,7 +27,36 @@ def fake_dll(marker: bytes) -> bytes:
     return bytes(data)
 
 
+def write_proxy_package(mods_root: Path, filename: str, name: str, payload: bytes,
+                        chain_alias: str | None = None) -> Path:
+    package = mods_root / "packages" / filename
+    manifest = {
+        "format": "jackdaw-mod-v1",
+        "game": "AC4BF-Resynced",
+        "name": name,
+        "version": "1.0.0",
+        "author": "test",
+        "category": "loose-file",
+        "targets": [{
+            "mode": "loose-file",
+            "file": "resources/version.dll",
+            "dest": "version.dll",
+        }],
+    }
+    if chain_alias:
+        manifest["proxy_chain"] = {"secondary": chain_alias}
+    with zipfile.ZipFile(package, "w") as archive:
+        archive.writestr("manifest.json", json.dumps(manifest))
+        archive.writestr("resources/version.dll", payload)
+    return package
+
+
 def main() -> int:
+    nexus_name = "Walk By Default 428 3 2026-08-25T04-28Z AbCd123"
+    assert Loader._nexus_archive_mod_id(nexus_name) == 428
+    assert Loader._loose_archive_metadata(nexus_name, "")[1] == "3"
+    assert Loader._proxy_chain_alias("", 428) == "wininet.dll"
+
     if TEST_ROOT.exists():
         shutil.rmtree(TEST_ROOT)
     GAME_DIR.mkdir(parents=True)
@@ -120,6 +149,56 @@ def main() -> int:
     loader.remove("Test Managed Loader")
     assert (GAME_DIR / "version.dll").read_bytes() == replacement
     assert not (GAME_DIR / "versionHooked.dll").exists()
+
+    # 5. Two custom proxies can coexist only when one explicitly declares a
+    #    supported secondary alias. This models Walk By Default (Nexus 428),
+    #    whose documented chain loads the previous proxy as wininet.dll.
+    chain_game = TEST_ROOT / "chain-game"
+    chain_mods = TEST_ROOT / "chain-mods"
+    chain_game.mkdir()
+    (chain_mods / "packages").mkdir(parents=True)
+    goated_proxy = fake_dll(b"GOATED CUSTOM PROXY")
+    walking_proxy = fake_dll(b"WALKING CUSTOM PROXY")
+    goated_package = write_proxy_package(
+        chain_mods, "goated.jmod", "Goated", goated_proxy)
+    walking_package = write_proxy_package(
+        chain_mods, "walking.jmod", "Walk By Default", walking_proxy,
+        "wininet.dll")
+    chain_loader = Loader(game_dir=chain_game, mods_root=chain_mods)
+    chain_loader.apply(goated_package)
+    walking_entries = chain_loader.apply(walking_package)
+    assert (chain_game / "version.dll").read_bytes() == walking_proxy
+    assert (chain_game / "wininet.dll").read_bytes() == goated_proxy
+    assert walking_entries[0]["compatibility"] == "primary-with-wininet.dll-chain"
+    try:
+        chain_loader.remove("Walk By Default")
+        raise AssertionError("primary proxy removal should be blocked while its chain is active")
+    except LoaderError as exc:
+        assert "depend" in str(exc).lower()
+    chain_loader.remove("Goated")
+    chain_loader.remove("Walk By Default")
+    assert not (chain_game / "version.dll").exists()
+    assert not (chain_game / "wininet.dll").exists()
+
+    # 6. Installation order does not matter: installing the secondary custom
+    #    proxy after the chain-capable primary places it directly in the alias.
+    reverse_game = TEST_ROOT / "reverse-game"
+    reverse_mods = TEST_ROOT / "reverse-mods"
+    reverse_game.mkdir()
+    (reverse_mods / "packages").mkdir(parents=True)
+    walking_first = write_proxy_package(
+        reverse_mods, "walking.jmod", "Walk By Default", walking_proxy,
+        "wininet.dll")
+    goated_second = write_proxy_package(
+        reverse_mods, "goated.jmod", "Goated", goated_proxy)
+    reverse_loader = Loader(game_dir=reverse_game, mods_root=reverse_mods)
+    reverse_loader.apply(walking_first)
+    goated_entries = reverse_loader.apply(goated_second)
+    assert (reverse_game / "version.dll").read_bytes() == walking_proxy
+    assert (reverse_game / "wininet.dll").read_bytes() == goated_proxy
+    assert goated_entries[0]["compatibility"] == "chained-as-wininet.dll"
+    reverse_loader.remove("Goated")
+    reverse_loader.remove("Walk By Default")
 
     print("LOOSE-FILE TESTS PASSED")
     return 0

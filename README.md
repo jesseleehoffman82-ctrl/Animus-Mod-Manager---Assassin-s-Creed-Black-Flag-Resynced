@@ -49,11 +49,19 @@ V1 should support several practical mod types:
 
 - FORGE resource mods when the replacement is already game-ready
 - loose-file mods copied into known game folders
+- compatible proxy-DLL chains where the loader or mod author documents a safe
+  secondary filename (`versionHooked.dll` or `wininet.dll`)
 - reversible config patches
 - save/profile utilities
 - runtime-assisted mods later, after stable signatures are mapped
 
 The key rule is that v1 should not require AnvilToolkit.
+
+`version.dll` is a single Windows loader entry point, so Animus never merges
+arbitrary DLL binaries. Identical/Ultimate ASI Loader copies are shared. A
+custom proxy can coexist when Ultimate ASI Loader or the mod's documented
+installation rule provides a secondary filename; otherwise Animus blocks the
+second proxy without overwriting the active one.
 
 ## Companion Project
 
