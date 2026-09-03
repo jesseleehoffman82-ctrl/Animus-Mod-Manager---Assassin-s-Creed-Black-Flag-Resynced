@@ -78,6 +78,10 @@ Type: files; Name: "{app}\mods\animus-native-shell.log"
 Type: files; Name: "{app}\mods\animus-mod-manager.log"
 
 [Code]
+var
+  ExistingInstallPath: String;
+  ExistingInstallVersion: String;
+
 function IsDotNet10DesktopRuntimeInstalled(): Boolean;
 var
   DotNetRoot: String;
@@ -106,6 +110,44 @@ begin
   end;
 end;
 
+function FindAnimusInstallUnderRoot(RootKey: Integer; var InstallPath: String;
+  var InstalledVersion: String): Boolean;
+var
+  Names: TArrayOfString;
+  I: Integer;
+  KeyName: String;
+  DisplayName: String;
+begin
+  Result := False;
+  if not RegGetSubkeyNames(
+    RootKey, 'Software\Microsoft\Windows\CurrentVersion\Uninstall', Names) then
+    Exit;
+
+  for I := 0 to GetArrayLength(Names) - 1 do
+  begin
+    KeyName := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\' + Names[I];
+    DisplayName := '';
+    if RegQueryStringValue(RootKey, KeyName, 'DisplayName', DisplayName) and
+      ((Pos('animus mod manager', LowerCase(DisplayName)) > 0) or
+       (Pos('animus mod & outfit manager', LowerCase(DisplayName)) > 0)) then
+    begin
+      InstallPath := '';
+      InstalledVersion := '';
+      RegQueryStringValue(RootKey, KeyName, 'InstallLocation', InstallPath);
+      RegQueryStringValue(RootKey, KeyName, 'DisplayVersion', InstalledVersion);
+      Result := True;
+      Exit;
+    end;
+  end;
+end;
+
+function FindAnimusInstallAtPath(Candidate: String; var InstallPath: String): Boolean;
+begin
+  Result := FileExists(AddBackslash(Candidate) + '{#MyAppExeName}');
+  if Result then
+    InstallPath := Candidate;
+end;
+
 function FindExistingInstall(var InstallPath: String; var InstalledVersion: String): Boolean;
 var
   UninstallKey: String;
@@ -124,8 +166,34 @@ begin
 
   if not Result then
   begin
+    Result := RegQueryStringValue(HKLM32, UninstallKey, 'InstallLocation', InstallPath);
+    if Result then
+      RegQueryStringValue(HKLM32, UninstallKey, 'DisplayVersion', InstalledVersion);
+  end;
+
+  { Early beta installers used different application metadata. Locate those by
+    their display name so they are still upgraded in place. }
+  if not Result then
+    Result := FindAnimusInstallUnderRoot(HKCU, InstallPath, InstalledVersion);
+  if not Result then
+    Result := FindAnimusInstallUnderRoot(HKLM64, InstallPath, InstalledVersion);
+  if not Result then
+    Result := FindAnimusInstallUnderRoot(HKLM32, InstallPath, InstalledVersion);
+
+  { Portable/early builds may not have an uninstall registry entry. }
+  if not Result then
+    Result := FindAnimusInstallAtPath(
+      ExpandConstant('{localappdata}\Programs\Animus Mod Manager'), InstallPath);
+  if not Result then
+    Result := FindAnimusInstallAtPath(
+      ExpandConstant('{localappdata}\Programs\Animus Mod & Outfit Manager'), InstallPath);
+  if not Result then
+    Result := FindAnimusInstallAtPath(
+      ExpandConstant('{userappdata}\Animus Mod Manager'), InstallPath);
+
+  if Result and (InstallPath = '') then
+  begin
     InstallPath := ExpandConstant('{localappdata}\Programs\Animus Mod Manager');
-    Result := FileExists(AddBackslash(InstallPath) + '{#MyAppExeName}');
   end;
 end;
 
@@ -152,6 +220,9 @@ begin
   if not FindExistingInstall(InstallPath, InstalledVersion) then
     Exit;
 
+  ExistingInstallPath := InstallPath;
+  ExistingInstallVersion := InstalledVersion;
+
   if InstalledVersion <> '' then
     VersionText := 'Version ' + InstalledVersion + ' is already installed.'
   else
@@ -163,4 +234,12 @@ begin
     'Choose Yes to reinstall or repair Animus Mod & Outfit Manager. Program files will be overwritten, while managed mods, settings and backups will be preserved.' + #13#10 + #13#10 +
     'Choose No to cancel Setup.',
     mbConfirmation, MB_YESNO) = IDYES;
+end;
+
+procedure InitializeWizard();
+begin
+  { If an early installer used another AppId, Inno Setup cannot recover its
+    previous directory automatically. Reuse the directory we detected. }
+  if ExistingInstallPath <> '' then
+    WizardForm.DirEdit.Text := ExistingInstallPath;
 end;
