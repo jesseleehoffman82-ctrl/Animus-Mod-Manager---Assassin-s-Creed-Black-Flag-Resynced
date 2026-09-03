@@ -1,6 +1,6 @@
 # Third-Party Notices
 
-Animus Mod Manager includes redistributable components from other projects.
+Animus Mod & Outfit Manager includes redistributable components from other projects.
 Their own license files are included beside the relevant binaries.
 
 - Python 3.14 embedded runtime — Python Software Foundation License.

@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.1.5 Beta — 2026-09-03
+
+- Replaced the retired personal-key and Nexus SSO integration with public,
+  unauthenticated Nexus GraphQL metadata lookups.
+- Removed direct Nexus file-download code; downloads remain in the user's
+  browser and updates are installed from a selected local archive.
+- Corrected the Black Flag Resynced Nexus game identifier to 9408.
+- Added release auditing that rejects legacy Nexus credentials, authentication
+  endpoints, or direct-download code before a Nexus package can be created.
+
+## 0.1.4 Beta — 2026-08-29
+
+- Renamed the application to **Animus Mod & Outfit Manager** across the native
+  window, interface, splash screen, installer, shortcuts, and documentation.
+- Made the footer version load automatically from the packaged release version
+  instead of requiring a separate hard-coded UI edit.
+
+## 0.1.3 Beta — 2026-08-29
+
+- Added conventional mod installation from RAR, 7z, TAR, and TGZ archives in
+  the normal Mods tab using the same safe extraction and backup workflow.
+- Added managed `videos/*.webm` replacement support for intro-skip and other
+  game-root video packages, including complete restoration on disable/remove.
+- Cleaned Nexus transport metadata from automatically detected mod names.
+- Fixed large loose-file and video mods duplicating backup data into the
+  installed-state file, which could block game detection, mod loading, and
+  complete uninstall operations.
+- Added automatic bounded-memory repair for state files created by the affected
+  build; existing packages and backup files are preserved.
+
 ## 0.1.2 Beta — 2026-08-27
 
 - Migrated the native desktop host to the .NET 10 Desktop Runtime.

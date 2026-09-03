@@ -1,8 +1,8 @@
-# Animus Mod Manager — Public Beta
+# Animus Mod & Outfit Manager — Public Beta
 
-Version 0.1.2 Beta for Windows x64
+Version 0.1.5 Beta for Windows x64
 
-Animus Mod Manager manages mods, outfit replacements, weapon textures, and
+Animus Mod & Outfit Manager manages mods, outfit replacements, weapon textures, and
 crew textures for Assassin's Creed IV: Black Flag Resynced. This is an early
 public test build. Keep backups and report the activity-log text when a test
 fails.
@@ -39,7 +39,7 @@ in the shared-slot hover information.
 - Do not delete the `mods/backups` or `mods/textures/backups` folders while
   changes are deployed.
 - Include `mods/animus-native-shell.log` and the visible activity log when
-  reporting a failure. Never publish a Nexus API credential with a report.
+  reporting a failure. The manager never asks for Nexus account credentials.
 
 ## Beta limitations
 

@@ -1,4 +1,4 @@
-"""One-shot JSON RPC adapter for the native Animus Mod Manager shell.
+"""One-shot JSON RPC adapter for the native Animus Mod & Outfit Manager shell.
 
 Each request is read from stdin and each response is written to stdout.  The
 desktop host starts a fresh Python process per operation, so Python can never
@@ -15,12 +15,20 @@ from datetime import datetime
 from pathlib import Path
 
 from .core import DEFAULT_GAME_DIR, Loader, LoaderError
-from .nexus import NexusClient, find_api_key, mod_page_url, save_api_key
+from .game_launch import launch_game as launch_selected_game
+from .nexus import NexusClient, mod_page_url
 from .packs import CATEGORY_CREW, CATEGORY_OUTFIT, CATEGORY_WEAPON, PackError, PackManager
 
 ROOT = Path(__file__).resolve().parents[2]
 MODS_ROOT = ROOT / "mods"
 SETTINGS_PATH = MODS_ROOT / "settings.json"
+
+
+def _app_version() -> str:
+    try:
+        return (ROOT / "VERSION.txt").read_text(encoding="utf-8").strip()
+    except OSError:
+        return "development"
 
 
 def _load_settings() -> dict:
@@ -75,7 +83,7 @@ class DesktopRpc:
             return None
         mod_id = int(nexus["mod_id"])
         return {
-            "game_id": int(nexus.get("game_id", 2996)),
+            "game_id": int(nexus.get("game_id", 9408)),
             "mod_id": mod_id,
             "url": mod_page_url(mod_id),
         }
@@ -147,6 +155,7 @@ class DesktopRpc:
 
     def state(self) -> dict:
         return {
+            "app_version": _app_version(),
             "game_dir": str(self.game_dir),
             "game_found": (self.game_dir / "ACBlackFlag.exe").is_file(),
             "mods": self.list_mods(),
@@ -154,7 +163,7 @@ class DesktopRpc:
             "weapons": self.list_packs(CATEGORY_WEAPON),
             "crew": self.list_packs(CATEGORY_CREW),
             "proxy_status": self.loader.proxy_status(),
-            "nexus_key_set": bool(find_api_key(self.loader.mods_root)),
+            "nexus_metadata_available": True,
         }
 
     def dispatch(self, method: str, args: list) -> tuple[object, dict | None]:
@@ -330,15 +339,9 @@ class DesktopRpc:
             executable = self.game_dir / "ACBlackFlag.exe"
             if not executable.is_file():
                 raise LoaderError(f"Game executable not found: {executable}")
-            subprocess.Popen(
-                [str(executable)],
-                cwd=str(self.game_dir),
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                close_fds=True,
-            )
-            self.log("Launching Assassin's Creed Black Flag Resynced.", "ok")
+            launch_method = launch_selected_game(self.game_dir)
+            suffix = " through Steam (controller-safe)." if launch_method == "steam" else "."
+            self.log(f"Launching Assassin's Creed Black Flag Resynced{suffix}", "ok")
             return {"ok": True}, None
 
         if method == "install_pack_path":
@@ -505,19 +508,8 @@ class DesktopRpc:
             state = self.state()
             return state, None
 
-        if method == "save_nexus_key":
-            key = str(args[0]).strip()
-            save_api_key(self.loader.mods_root, key)
-            self.log("Nexus API key saved." if key else "Nexus API key cleared.", "ok")
-            state = self.state()
-            return state, None
-
         if method == "check_updates":
-            key = find_api_key(self.loader.mods_root)
-            if not key:
-                self.log("Nexus is not connected. Use CONNECT TO NEXUS first.", "warn")
-                return {"ok": False}, None
-            client = NexusClient(api_key=key, mods_root=self.loader.mods_root)
+            client = NexusClient()
             mod_results = self.loader.check_updates(client=client)
             pack_results = self.manager.check_updates(client=client)
             for item in [*mod_results, *pack_results]:

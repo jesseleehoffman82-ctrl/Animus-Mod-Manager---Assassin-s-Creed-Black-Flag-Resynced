@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="dark">
-  <title>Animus Mod Manager</title>
+  <title>Animus Mod &amp; Outfit Manager</title>
   <link rel="stylesheet" href="app.css?v=20260824-3">
 </head>
 <body>
@@ -16,7 +16,7 @@
         </div>
         <div class="game-title"><span>ASSASSIN'S CREED</span><strong>BLACK FLAG</strong><em>RESYNCED</em></div>
         <div class="brand-divider"></div>
-        <div class="product-title"><h1>ANIMUS MOD MANAGER</h1></div>
+        <div class="product-title"><h1>ANIMUS MOD &amp; OUTFIT MANAGER</h1></div>
       </div>
       <div class="window-controls">
         <button data-window="minimize" aria-label="Minimize">—</button>
@@ -44,8 +44,8 @@
             <button class="tab" data-tab="crew">CREW</button>
           </nav>
           <div class="nexus-tools">
-            <button class="button compact nexus-connect" id="connect-nexus-button">
-              <i></i><span id="nexus-connect-label">CONNECT NEXUS</span>
+            <button class="button compact nexus-connect" id="nexus-page-button" title="Browse Black Flag Resynced mods on Nexus">
+              <i></i><span>NEXUS MODS</span>
             </button>
             <button class="button compact launch-game" id="launch-game-button">
               <span class="launch-icon">▷</span><span id="launch-game-label">LAUNCH GAME</span>
@@ -74,7 +74,7 @@
       </section>
     </main>
 
-    <footer><span class="footer-mark">⌘</span><span>ANIMUS MOD MANAGER</span><span>v0.1.2 BETA</span></footer>
+    <footer><span class="footer-mark">⌘</span><span>ANIMUS MOD &amp; OUTFIT MANAGER</span><span id="app-version">VERSION</span></footer>
   </div>
 
   <div class="context-menu" id="context-menu" hidden>
@@ -101,7 +101,7 @@
         <label for="rename-input">DISPLAY NAME</label>
         <input id="rename-input" type="text" maxlength="160" autocomplete="off" spellcheck="false">
         <p id="rename-error" class="rename-error" aria-live="polite"></p>
-        <p class="rename-note">This only changes the name shown in Animus Mod Manager. Managed files and deployment data remain linked.</p>
+        <p class="rename-note">This only changes the name shown in Animus Mod &amp; Outfit Manager. Managed files and deployment data remain linked.</p>
       </div>
       <div class="dialog-actions">
         <button type="button" class="button" id="rename-cancel">CANCEL</button>

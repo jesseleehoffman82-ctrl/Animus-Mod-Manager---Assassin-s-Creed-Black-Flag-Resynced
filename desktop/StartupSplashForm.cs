@@ -18,7 +18,7 @@ internal sealed class StartupSplashForm : Form
     public StartupSplashForm(string rootPath)
     {
         root = Path.GetFullPath(rootPath);
-        Text = "Animus Mod Manager";
+        Text = "Animus Mod & Outfit Manager";
         ClientSize = new Size(580, 260);
         StartPosition = FormStartPosition.CenterScreen;
         FormBorderStyle = FormBorderStyle.None;
@@ -33,8 +33,8 @@ internal sealed class StartupSplashForm : Form
         var bannerPath = Path.Combine(root, "tools", "Animus_loader", "web", "assets", "amm-splash.jpg");
         if (File.Exists(bannerPath)) banner = Image.FromFile(bannerPath);
 
-        var title = NewLabel("ANIMUS MOD MANAGER", 27, 30, 390, 32, 21, Color.FromArgb(211, 179, 126));
-        title.Font = new Font("Segoe UI Semibold", 18, FontStyle.Regular);
+        var title = NewLabel("ANIMUS MOD & OUTFIT MANAGER", 27, 30, 500, 32, 21, Color.FromArgb(211, 179, 126));
+        title.Font = new Font("Segoe UI Semibold", 16, FontStyle.Regular);
         var subtitle = NewLabel("INITIALIZING ANIMUS INTERFACE", 29, 66, 360, 20, 9, Color.FromArgb(183, 157, 116));
         subtitle.Font = new Font("Segoe UI", 8.5f, FontStyle.Regular);
 
@@ -132,7 +132,7 @@ internal sealed class StartupSplashForm : Form
             await Task.Delay(130);
             SetProgress(94, $"{outfits} outfit{(outfits == 1 ? "" : "s")} and {weapons} weapon pack{(weapons == 1 ? "" : "s")} loaded");
             await Task.Delay(180);
-            SetProgress(100, "Animus Mod Manager ready");
+            SetProgress(100, "Animus Mod & Outfit Manager ready");
             await Task.Delay(160);
             ManagerReady?.Invoke(this, EventArgs.Empty);
         }
@@ -142,7 +142,7 @@ internal sealed class StartupSplashForm : Form
             progressFill.BackColor = Color.FromArgb(184, 55, 52);
             SetProgress(Math.Max(progress, 10), "Startup failed — click to view details");
             status.Cursor = Cursors.Hand;
-            status.Click += (_, _) => MessageBox.Show(this, exception.Message, "Animus Mod Manager", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            status.Click += (_, _) => MessageBox.Show(this, exception.Message, "Animus Mod & Outfit Manager", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import tempfile
+import tarfile
 import zipfile
 from pathlib import Path
 
@@ -44,6 +45,61 @@ def main() -> None:
         assert not (game / "XINPUT9_1_0.dll").exists()
         assert not (game / "acbfr-core.dll").exists()
         assert not (game / "acbfr-loot.ini").exists()
+
+        # Conventional video replacers belong in the normal Mods tab. Their
+        # top-level videos/ paths are relative to the game root, and originals
+        # must be restored when the mod is disabled or removed.
+        videos = game / "videos"
+        videos.mkdir()
+        (videos / "ANVIL_Logo.webm").write_bytes(b"original-anvil")
+        video_source = root / "Resynced Fast Launch 2 1.1.zip"
+        with zipfile.ZipFile(video_source, "w") as archive:
+            archive.writestr("videos/ANVIL_Logo.webm", b"blank-video")
+            archive.writestr("videos/en/Epilepsy.webm", b"blank-warning")
+            archive.writestr(
+                "ReadMe.txt",
+                "RESYNCED FAST LAUNCH - Assassin's Creed IV Black Flag Resynced\n"
+                "version 1.1\n",
+            )
+
+        video_managed, video_package, video_converted = loader.import_package(video_source)
+        assert video_converted
+        assert video_package.name == "Resynced Fast Launch"
+        assert video_package.version == "1.1"
+        assert {target.dest for target in video_package.targets} == {
+            "videos/ANVIL_Logo.webm", "videos/en/Epilepsy.webm",
+        }
+
+        loader.apply(video_managed)
+        assert (videos / "ANVIL_Logo.webm").read_bytes() == b"blank-video"
+        assert (videos / "en" / "Epilepsy.webm").read_bytes() == b"blank-warning"
+        loader.remove(video_package.name)
+        assert (videos / "ANVIL_Logo.webm").read_bytes() == b"original-anvil"
+        assert not (videos / "en" / "Epilepsy.webm").exists()
+
+        # Exercise the non-ZIP extraction/normalization route without relying
+        # on an external test fixture. RAR and 7z use this same normalized-tree
+        # importer after the bundled 7-Zip extractor has unpacked them.
+        tar_payload = root / "tar-payload"
+        (tar_payload / "videos").mkdir(parents=True)
+        (tar_payload / "videos" / "HUB_BootFlow_Intro.webm").write_bytes(b"blank-intro")
+        (tar_payload / "ReadMe.txt").write_text("Copy videos into the game folder.\n")
+        tar_source = root / "Fast Videos 3 1.2 2026-08-29T10-00Z abc123.tgz"
+        with tarfile.open(tar_source, "w:gz") as archive:
+            archive.add(tar_payload / "videos", arcname="videos")
+            archive.add(tar_payload / "ReadMe.txt", arcname="ReadMe.txt")
+
+        tar_managed, tar_package, tar_converted = loader.import_package(tar_source)
+        assert tar_converted
+        assert tar_package.name == "Fast Videos"
+        assert tar_package.version == "1.2"
+        assert {target.dest for target in tar_package.targets} == {
+            "videos/HUB_BootFlow_Intro.webm",
+        }
+        loader.apply(tar_managed)
+        assert (videos / "HUB_BootFlow_Intro.webm").read_bytes() == b"blank-intro"
+        loader.remove(tar_package.name)
+        assert not (videos / "HUB_BootFlow_Intro.webm").exists()
 
         blocked = root / "unsafe.zip"
         with zipfile.ZipFile(blocked, "w") as archive:

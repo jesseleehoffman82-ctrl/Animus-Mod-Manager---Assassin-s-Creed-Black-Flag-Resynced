@@ -18,15 +18,15 @@ import json
 import os
 import subprocess
 import threading
-import urllib.request
 from pathlib import Path
 from datetime import datetime
 
 import webview
 
 from .core import DEFAULT_GAME_DIR, Loader, LoaderError
+from .game_launch import launch_game as launch_selected_game
 from .packs import PackError, PackManager, CATEGORY_CREW, CATEGORY_OUTFIT, CATEGORY_WEAPON
-from .nexus import NexusClient, NexusError, save_api_key, find_api_key
+from .nexus import NexusClient, NexusError
 
 
 class Api:
@@ -116,7 +116,7 @@ class Api:
             "weapons": self.list_packs(CATEGORY_WEAPON),
             "crew": self.list_packs(CATEGORY_CREW),
             "proxy_status": self.loader.proxy_status(),
-            "nexus_key_set": bool(find_api_key(self.loader.mods_root)),
+            "nexus_metadata_available": True,
         }
 
     def list_mods(self) -> list[dict]:
@@ -212,15 +212,9 @@ class Api:
         if not executable.is_file():
             self._log(f"Game executable not found: {executable}", "err")
             return {"ok": False}
-        subprocess.Popen(
-            [str(executable)],
-            cwd=str(self.loader.game_dir),
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            close_fds=True,
-        )
-        self._log("Launching Assassin's Creed Black Flag Resynced.", "ok")
+        launch_method = launch_selected_game(self.loader.game_dir)
+        suffix = " through Steam (controller-safe)." if launch_method == "steam" else "."
+        self._log(f"Launching Assassin's Creed Black Flag Resynced{suffix}", "ok")
         return {"ok": True}
 
     # ------------------------------------------------------------------ #
@@ -376,53 +370,17 @@ class Api:
         nexus = (pkg.manifest or {}).get("nexus")
         if not nexus:
             return None
-        return {"game_id": nexus.get("game_id", 2996),
+        return {"game_id": nexus.get("game_id", 9408),
                 "mod_id": nexus.get("mod_id"), "version": pkg.version}
 
-    def update_mod(self, name: str) -> dict:
-        """Download the latest version of a Nexus-linked mod and install it."""
-        threading.Thread(target=self._do_update_mod, args=(name,), daemon=True).start()
-        return {"ok": True, "started": True}
-
-    def _do_update_mod(self, name: str) -> None:
-        meta = self.get_mod_nexus(name)
-        if not meta:
-            self._log(f"No Nexus link on '{name}'. Set one via the mod's "
-                      f"manifest (nexus: game_id/mod_id).", "warn")
-            return
-        api_key = find_api_key(self.loader.mods_root)
-        if not api_key:
-            self._log("No Nexus API key set. Save one first.", "warn")
-            return
-        client = NexusClient(api_key=api_key, mods_root=self.loader.mods_root)
-        try:
-            latest = client.latest_file(meta["mod_id"], meta.get("game_id", 2996))
-        except NexusError as exc:
-            self._log(f"Update check failed: {exc}", "err")
-            return
-        if not latest or not latest.get("download_url"):
-            self._log(f"No downloadable update file found for '{name}' "
-                      f"(may need a premium Nexus account).", "warn")
-            return
-        self._log(f"Downloading {latest['name']} "
-                  f"({latest.get('version') or '?'})...", "info")
-        target = self.loader.packages_dir / (latest["name"] or f"{name}-update.jmod")
-        try:
-            urllib.request.urlretrieve(latest["download_url"], target)
-        except Exception as exc:  # noqa: BLE001
-            self._log(f"Download failed: {exc}", "err")
-            return
-        self._log(f"Downloaded {target.name}. Installing...", "info")
-        try:
-            pkg = self.loader.read_package(target)
-            backups = self.loader.apply(target, priority=0)
-            self._log(f"Updated '{pkg.name} v{pkg.version}' — "
-                      f"{len(backups)} target(s) patched", "ok")
-        except (LoaderError, OSError) as exc:
-            self._log(f"Installing update failed: {exc}", "err")
-        except Exception as exc:  # noqa: BLE001
-            self._log(f"Unexpected error: {exc}", "err")
-        self._push_state()
+    def open_nexus_page(self) -> dict:
+        """Open Nexus for manual archive downloads."""
+        import webbrowser
+        opened = webbrowser.open(
+            "https://www.nexusmods.com/assassinscreedblackflagresynced/mods/"
+        )
+        self._log("Opened Nexus Mods. Downloads remain manual.", "info")
+        return {"ok": bool(opened)}
 
     # ------------------------------------------------------------------ #
     # outfits / weapons / crew (shared PackManager)
@@ -536,24 +494,14 @@ class Api:
     # ------------------------------------------------------------------ #
     # nexus
     # ------------------------------------------------------------------ #
-    def save_nexus_key(self, key: str) -> dict:
-        key = (key or "").strip()
-        save_api_key(self.loader.mods_root, key)
-        self._log("Nexus API key saved." if key else "Nexus API key cleared.", "ok")
-        return self.get_state()
-
     def check_updates(self) -> dict:
         threading.Thread(target=self._do_check_updates, daemon=True).start()
         return {"ok": True, "started": True}
 
     def _do_check_updates(self) -> None:
-        api_key = find_api_key(self.loader.mods_root)
-        if not api_key:
-            self._log("No Nexus API key set. Paste a key and SAVE first.", "warn")
-            return
-        self._log("Checking for updates...", "info")
+        self._log("Checking public Nexus metadata for updates...", "info")
         try:
-            client = NexusClient(api_key=api_key, mods_root=self.loader.mods_root)
+            client = NexusClient()
             mod_results = self.loader.check_updates(client=client)
             pack_results = self.manager.check_updates(client=client)
         except Exception as exc:  # pragma: no cover

@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Net.WebSockets;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
@@ -240,9 +239,6 @@ internal sealed class ConflictPromptForm : Form
 
 internal sealed class MainForm : Form
 {
-    // Nexus assigns this slug after reviewing a public test build. During
-    // development it may be supplied with ANIMUS_NEXUS_APP_ID.
-    private const string NexusApplicationId = "";
     private const int WmNcHitTest = 0x0084;
     private const int HtClient = 1;
     private const int HtLeft = 10;
@@ -261,7 +257,7 @@ internal sealed class MainForm : Form
     public MainForm(string rootPath)
     {
         root = Path.GetFullPath(rootPath);
-        Text = "Animus Mod Manager";
+        Text = "Animus Mod & Outfit Manager";
         try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); }
         catch { /* The executable icon is cosmetic; startup should still continue. */ }
         BackColor = Color.FromArgb(7, 8, 8);
@@ -280,7 +276,7 @@ internal sealed class MainForm : Form
             catch (Exception ex)
             {
                 Program.LogFailure("WebView initialization", ex);
-                MessageBox.Show(this, ex.Message, "Animus Mod Manager could not start",
+                MessageBox.Show(this, ex.Message, "Animus Mod & Outfit Manager could not start",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
                 Close();
             }
@@ -322,7 +318,7 @@ internal sealed class MainForm : Form
             {
                 var error = new InvalidOperationException($"Interface navigation failed: {e.WebErrorStatus}");
                 Program.LogFailure("Frontend navigation", error);
-                core.NavigateToString($"<body style='background:#080909;color:#eee;font:16px Segoe UI;padding:30px'><h2>Animus Mod Manager</h2><p>{System.Net.WebUtility.HtmlEncode(error.Message)}</p><p>{System.Net.WebUtility.HtmlEncode(indexPath)}</p></body>");
+                core.NavigateToString($"<body style='background:#080909;color:#eee;font:16px Segoe UI;padding:30px'><h2>Animus Mod &amp; Outfit Manager</h2><p>{System.Net.WebUtility.HtmlEncode(error.Message)}</p><p>{System.Net.WebUtility.HtmlEncode(indexPath)}</p></body>");
             }
         };
         core.Navigate(new Uri(indexPath).AbsoluteUri);
@@ -350,11 +346,13 @@ internal sealed class MainForm : Form
             string rpcMethod = method;
             JsonArray rpcArgs = JsonNode.Parse(args.GetRawText())?.AsArray() ?? [];
             var showLaunchOverlay = false;
-            if (method == "connect_nexus")
+            if (method == "open_nexus_page")
             {
-                var nexusPayload = await ConnectToNexus();
-                nexusPayload["id"] = id;
-                await PostJson(nexusPayload.ToJsonString());
+                Process.Start(new ProcessStartInfo("https://www.nexusmods.com/assassinscreedblackflagresynced/mods/")
+                {
+                    UseShellExecute = true,
+                });
+                await PostResponse(id, new JsonObject { ["result"] = true });
                 return;
             }
             if (method == "browse_game_dir")
@@ -505,20 +503,11 @@ internal sealed class MainForm : Form
         }
 
         if (IsDisposed) return;
-        if (gameWindow != IntPtr.Zero && display is Rectangle bounds)
+        if (gameWindow != IntPtr.Zero)
         {
-            // Borderless fullscreen keeps the game foregrounded while allowing
-            // the small click-through confirmation overlay to render above it.
-            var style = NativeMethods.GetWindowLong(gameWindow, NativeMethods.GwlStyle);
-            style &= ~(NativeMethods.WsCaption | NativeMethods.WsThickFrame |
-                       NativeMethods.WsMinimizeBox | NativeMethods.WsMaximizeBox |
-                       NativeMethods.WsSysMenu);
-            NativeMethods.SetWindowLong(gameWindow, NativeMethods.GwlStyle, style);
-            NativeMethods.SetWindowPos(
-                gameWindow, IntPtr.Zero, bounds.Left, bounds.Top, bounds.Width, bounds.Height,
-                NativeMethods.SwpFrameChanged | NativeMethods.SwpShowWindow);
-            NativeMethods.ShowWindow(gameWindow, NativeMethods.SwShow);
-            NativeMethods.SetForegroundWindow(gameWindow);
+            // Do not alter, resize, foreground, or re-style the game window.
+            // Steam owns the launch and its input session; manipulating the
+            // window here can disturb controller/Steam Input initialization.
             WindowState = FormWindowState.Minimized;
             // Give the game ten seconds to finish its startup transition and
             // begin rendering before the loaded-mod confirmation is shown.
@@ -529,82 +518,6 @@ internal sealed class MainForm : Form
         var overlay = new LaunchOverlayForm(display);
         overlay.Show();
         overlay.BringToFront();
-    }
-
-    private async Task<JsonObject> ConnectToNexus()
-    {
-        var appId = Environment.GetEnvironmentVariable("ANIMUS_NEXUS_APP_ID");
-        if (string.IsNullOrWhiteSpace(appId)) appId = NexusApplicationId;
-        if (string.IsNullOrWhiteSpace(appId))
-        {
-            return new JsonObject
-            {
-                ["result"] = null,
-                ["state"] = null,
-                ["logs"] = new JsonArray
-                {
-                    new JsonObject
-                    {
-                        ["tag"] = "warn",
-                        ["message"] = "Nexus browser sign-in is ready but requires the Animus Mod Manager application ID issued by Nexus Mods."
-                    }
-                },
-                ["error"] = "Nexus must register Animus Mod Manager before browser sign-in can be activated."
-            };
-        }
-
-        using var socket = new ClientWebSocket();
-        socket.Options.KeepAliveInterval = TimeSpan.FromSeconds(25);
-        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
-        await socket.ConnectAsync(new Uri("wss://sso.nexusmods.com"), timeout.Token);
-
-        var requestId = Guid.NewGuid().ToString();
-        var handshake = JsonSerializer.Serialize(new { id = requestId, appid = appId });
-        var sendBytes = Encoding.UTF8.GetBytes(handshake);
-        await socket.SendAsync(new ArraySegment<byte>(sendBytes), WebSocketMessageType.Text, true, timeout.Token);
-
-        Process.Start(new ProcessStartInfo($"https://www.nexusmods.com/sso?id={requestId}")
-        {
-            UseShellExecute = true,
-        });
-
-        var buffer = new byte[8192];
-        using var message = new MemoryStream();
-        WebSocketReceiveResult received;
-        do
-        {
-            received = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), timeout.Token);
-            if (received.MessageType == WebSocketMessageType.Close)
-                throw new InvalidOperationException("Nexus closed the authorization request.");
-            message.Write(buffer, 0, received.Count);
-        } while (!received.EndOfMessage);
-
-        var responseText = Encoding.UTF8.GetString(message.ToArray()).Trim();
-        var apiKey = ExtractNexusApiKey(responseText);
-        if (string.IsNullOrWhiteSpace(apiKey))
-            throw new InvalidOperationException("Nexus authorization completed without returning an API key.");
-
-        return await RunPython("save_nexus_key", new JsonArray { apiKey });
-    }
-
-    private static string? ExtractNexusApiKey(string responseText)
-    {
-        try
-        {
-            using var document = JsonDocument.Parse(responseText);
-            var root = document.RootElement;
-            if (root.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Object &&
-                data.TryGetProperty("api_key", out var nestedKey))
-                return nestedKey.GetString();
-            if (root.TryGetProperty("api_key", out var directKey))
-                return directKey.GetString();
-        }
-        catch (JsonException)
-        {
-            // Older Nexus SSO responses may contain only the raw key.
-        }
-        var raw = responseText.Trim('"', ' ', '\r', '\n');
-        return raw.Length >= 32 && !raw.Contains('{') ? raw : null;
     }
 
     private bool HandleWindowCommand(string method)
@@ -802,7 +715,7 @@ internal static class Program
         try { root = ResolveRoot(args); }
         catch (Exception ex)
         {
-            MessageBox.Show(ex.Message, "Animus Mod Manager could not start",
+            MessageBox.Show(ex.Message, "Animus Mod & Outfit Manager could not start",
                 MessageBoxButtons.OK, MessageBoxIcon.Error);
             return;
         }
@@ -819,7 +732,7 @@ internal static class Program
         catch (Exception ex)
         {
             LogFailure("Native application startup", ex);
-            MessageBox.Show(ex.Message, "Animus Mod Manager could not start",
+            MessageBox.Show(ex.Message, "Animus Mod & Outfit Manager could not start",
                 MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }

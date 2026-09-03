@@ -252,7 +252,7 @@ def _encode_directxtex(path: Path, slot_info) -> bytes:
     exe = _texconv_path()
     if not exe.is_file():
         raise PngEncodeError(
-            "Animus' BC7 texture encoder is missing. Reinstall Animus Mod Manager.")
+            "Animus' BC7 texture encoder is missing. Reinstall Animus Mod & Outfit Manager.")
 
     W = int(getattr(slot_info, "W"))
     H = int(getattr(slot_info, "H"))

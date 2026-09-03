@@ -1,4 +1,4 @@
-# Animus Mod Manager - Python dependencies
+# Animus Mod & Outfit Manager - Python dependencies
 # Install with:  pip install -r requirements.txt
 
 # Required for unpacking .7z pack archives (Nexus uploads). .zip/.tar use stdlib.

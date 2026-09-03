@@ -1,4 +1,4 @@
-"""Animus Mod Manager - core installer engine.
+"""Animus Mod & Outfit Manager - core installer engine.
 
 Applies `.jmod` packages to the Assassin's Creed IV: Black Flag Resynced game
 with full backup/revert, conflict detection, and load-order resolution.
@@ -12,9 +12,11 @@ from __future__ import annotations
 import ctypes
 import hashlib
 import json
+import os
 import re
 import shutil
 import struct
+import tempfile
 import time
 import zipfile
 from dataclasses import dataclass, field
@@ -37,6 +39,8 @@ def _version_gt(a: str, b: str) -> bool:
             return x > y
     return len(ka) > len(kb)
 
+FORGE_ARCHIVE_MAGIC = b"scimitar"
+# Historical helper name retained for BMS-container discovery below.
 FORGE_MAGIC = bytes.fromhex("33 aa fb 57 99 fa 04 10")
 
 # Default install locations (overridable).
@@ -105,40 +109,44 @@ class ForgeEditor:
         self.path = path
 
     def find_resource_offsets(self, resource_id: int) -> list[int]:
-        """Locate every occurrence of a resource id's raw stored in the file.
+        """Locate the stored payload offset for a resource through the TOC."""
+        return [offset for offset, _size in self.find_resource_entries(resource_id)]
 
-        We scan for the packed resource id in the raw archive. This is O(n) over
-        the file but only reads the packed id pattern. For an update-safe match
-        this should later use the TOC; V1 validates expected bytes before writing.
+    def find_resource_entries(self, resource_id: int) -> list[tuple[int, int]]:
+        """Return ``(payload offset, stored size)`` entries from the FORGE TOC.
+
+        A raw search for the resource ID is unsafe because it finds the ID
+        inside the TOC row rather than the resource payload itself.
         """
-        id_bytes = resource_id.to_bytes(8, "little")
-        hits: list[int] = []
         with self.path.open("rb") as handle:
-            cursor = 0
-            chunk = handle.read(1 << 20)
-            overlap = b""
-            while chunk:
-                data = overlap + chunk
-                start = 0
-                while True:
-                    pos = data.find(id_bytes, start)
-                    if pos < 0:
-                        break
-                    hits.append(cursor - len(overlap) + pos)
-                    start = pos + 1
-                overlap = data[-(len(id_bytes) - 1):]
-                cursor += len(chunk)
-                chunk = handle.read(1 << 20)
-        return hits
+            header = handle.read(64)
+            if len(header) < 64 or header[:8] != FORGE_ARCHIVE_MAGIC:
+                raise LoaderError(f"{self.path.name}: invalid scimitar FORGE header")
+            header_table_offset = struct.unpack_from("<Q", header, 13)[0]
+            handle.seek(header_table_offset)
+            table_header = handle.read(12)
+            if len(table_header) != 12:
+                raise LoaderError(f"{self.path.name}: truncated FORGE table header")
+            count, toc_offset = struct.unpack("<IQ", table_header)
+            handle.seek(toc_offset)
+            matches: list[tuple[int, int]] = []
+            for _ in range(count):
+                row = handle.read(24)
+                if len(row) != 24:
+                    raise LoaderError(f"{self.path.name}: truncated FORGE TOC")
+                offset, found_id, stored_size, _class_hash = struct.unpack(
+                    "<QQII", row
+                )
+                if found_id == resource_id:
+                    matches.append((offset, stored_size))
+            return matches
 
     def validate_resource_offsets(self, resource_id: int) -> list[int]:
         """Return valid resource offsets for a resource id.
 
-        Uses the forge TOC when discoverable; otherwise falls back to a raw
-        scan. The returned offsets are used to select the requested occurrence.
+        The returned offsets are payload offsets, never TOC-row ID locations.
         """
-        offsets = self.find_resource_offsets(resource_id)
-        return offsets
+        return self.find_resource_offsets(resource_id)
 
 
 def sha256_file(path: Path) -> str:
@@ -237,7 +245,7 @@ class Loader:
         return pkg
 
     def import_package(self, source: Path) -> tuple[Path, Package, bool]:
-        """Import either a native .jmod or a conventional loose-file ZIP.
+        """Import a native .jmod or a conventional loose-file archive.
 
         Most Nexus authors understandably ship the files a player should copy
         beside the game executable rather than an Animus-specific manifest.
@@ -251,6 +259,34 @@ class Loader:
         source = Path(source)
         if not source.is_file():
             raise LoaderError(f"Package not found: {source}")
+
+        source_name = source.name.lower()
+        archive_suffix = ".tar.gz" if source_name.endswith(".tar.gz") else source.suffix.lower()
+        external_archives = {".7z", ".rar", ".tar", ".tar.gz", ".tgz"}
+
+        if archive_suffix in external_archives:
+            # Reuse the hardened extractor used by outfit/weapon/crew packs,
+            # then normalize the extracted tree to ZIP so the same manifest,
+            # path-safety, file-type, and wrapper-folder rules apply to every
+            # conventional mod archive format.
+            from .packs import PackError, PackManager
+
+            with tempfile.TemporaryDirectory(prefix="animus_mod_archive_") as raw:
+                temporary_root = Path(raw)
+                extracted = temporary_root / "extracted"
+                extracted.mkdir()
+                try:
+                    PackManager._extract_archive(source, extracted)
+                except PackError as exc:
+                    raise LoaderError(str(exc)) from exc
+
+                normalized = temporary_root / "normalized.zip"
+                with zipfile.ZipFile(normalized, "w", compression=zipfile.ZIP_DEFLATED) as output:
+                    for path in sorted(extracted.rglob("*")):
+                        if path.is_file():
+                            output.write(path, path.relative_to(extracted).as_posix())
+                target = self._convert_loose_zip(normalized, display_source=source)
+                return target, self.read_package(target), True
 
         try:
             with zipfile.ZipFile(source) as archive:
@@ -269,8 +305,9 @@ class Loader:
         target = self._convert_loose_zip(source)
         return target, self.read_package(target), True
 
-    def _convert_loose_zip(self, source: Path) -> Path:
+    def _convert_loose_zip(self, source: Path, display_source: Path | None = None) -> Path:
         """Turn a safe, conventional Nexus loose-file ZIP into a .jmod."""
+        archive_source = display_source or source
         documentation_exts = {
             ".txt", ".md", ".rtf", ".pdf", ".png", ".jpg", ".jpeg",
             ".gif", ".webp", ".url",
@@ -278,7 +315,7 @@ class Loader:
         installable_exts = {
             ".dll", ".asi", ".ini", ".cfg", ".conf", ".toml", ".json",
             ".xml", ".yaml", ".yml", ".lua", ".dat", ".bin", ".pak",
-            ".forge",
+            ".forge", ".webm",
         }
         blocked_exts = {".exe", ".msi", ".bat", ".cmd", ".ps1", ".vbs", ".js", ".lnk"}
 
@@ -329,11 +366,19 @@ class Loader:
                     f"Animus could not determine where these archive files belong: {preview}. "
                     "This mod needs an Animus manifest or a supported installer rule."
                 )
-            if not installable or not any(path.suffix.lower() in {".dll", ".asi", ".forge", ".pak"}
-                                          for _, path in installable):
+            has_known_payload = any(
+                path.suffix.lower() in {".dll", ".asi", ".forge", ".pak"}
+                or (
+                    path.suffix.lower() == ".webm"
+                    and bool(path.parts)
+                    and path.parts[0].lower() == "videos"
+                )
+                for _, path in installable
+            )
+            if not installable or not has_known_payload:
                 raise LoaderError(
-                    f"'{source.name}' does not look like a game-root mod. "
-                    "No DLL, ASI, FORGE, or PAK payload was found."
+                    f"'{archive_source.name}' does not look like a supported game-root mod. "
+                    "No DLL, ASI, FORGE, PAK, or videos/WEBM payload was found."
                 )
 
             readme_text = ""
@@ -341,7 +386,7 @@ class Loader:
                 if path.suffix.lower() in {".txt", ".md"} and "readme" in path.name.lower():
                     readme_text = archive.read(item).decode("utf-8", errors="replace")
                     break
-            name, version = self._loose_archive_metadata(source.stem, readme_text)
+            name, version = self._loose_archive_metadata(archive_source.stem, readme_text)
             safe_name = re.sub(r"[^A-Za-z0-9._-]+", "-", name).strip("-.") or "Imported-Mod"
             target = self.packages_dir / f"{safe_name}.jmod"
             temporary = target.with_suffix(".tmp.jmod")
@@ -353,7 +398,7 @@ class Loader:
                 "author": "unknown",
                 "category": "loose-file",
                 "description": "Imported from a conventional Nexus loose-file archive.",
-                "source_archive": source.name,
+                "source_archive": archive_source.name,
                 "targets": [],
             }
             with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_DEFLATED) as output:
@@ -375,6 +420,17 @@ class Loader:
     def _loose_archive_metadata(fallback: str, readme: str) -> tuple[str, str]:
         name = fallback
         version = "1.0"
+        # Nexus download names commonly end with:
+        #   <mod id> <version> <UTC timestamp> <download token>
+        # Remove that transport metadata before showing the package in the UI.
+        nexus_suffix = re.search(
+            r"(?i)\s+\d+\s+v?(\d+(?:\.\d+)+(?:\s*(?:alpha|beta))?)"
+            r"\s+\d{4}-\d{2}-\d{2}T[^ ]+\s+[A-Za-z0-9]+$",
+            fallback,
+        )
+        if nexus_suffix:
+            name = fallback[:nexus_suffix.start()].strip()
+            version = nexus_suffix.group(1).strip()
         title = re.search(
             r"(?im)^\s*([A-Z][A-Z0-9 '&_.-]{2,}?)\s+-\s+Assassin(?:'s)? Creed",
             readme,
@@ -384,7 +440,7 @@ class Loader:
         found_version = re.search(r"(?im)^\s*version\s+([^\r\n]+?)\s*$", readme)
         if found_version:
             version = found_version.group(1).strip()
-        else:
+        elif not nexus_suffix:
             filename_version = re.search(r"(?i)(?:^|[ _-])v?(\d+(?:\.\d+)+(?:\s*(?:alpha|beta))?)", fallback)
             if filename_version:
                 version = filename_version.group(1).strip()
@@ -420,6 +476,12 @@ class Loader:
                     file=file,
                     replacement=replacement,
                     sha256=target.get("sha256"),
+                    expected_original=(
+                        bytes.fromhex(target["expected_original"])
+                        if target.get("expected_original") else None
+                    ),
+                    expected_original_size=target.get("expected_original_size"),
+                    expected_original_sha256=target.get("expected_original_sha256"),
                     needle=bytes.fromhex(needle_hex) if needle_hex else None,
                     patch_offset=int(target.get("patch_offset", 0), 0) if target.get("patch_offset") else None,
                     patch=bytes.fromhex(patch_hex) if patch_hex else None,
@@ -439,10 +501,72 @@ class Loader:
     # ------------------------------------------------------------------ #
     # state
     # ------------------------------------------------------------------ #
+    def _compact_legacy_state(self) -> None:
+        """Remove duplicated inline backup bytes from oversized state files.
+
+        Older builds stored every loose-file backup twice: once in the backup
+        file and again as a hex string in installed-mods.json. A large video
+        replacer could therefore turn the JSON file into several gigabytes and
+        make startup, toggles, and uninstall appear to hang. The backup file is
+        already the authoritative copy, so replace only those legacy strings
+        with null using a bounded-memory streaming pass.
+        """
+        if not self.state_path.is_file() or self.state_path.stat().st_size < 16 * 1024 * 1024:
+            return
+
+        marker = b'"original_hex": "'
+        temp_path = self.state_path.with_suffix(".json.compacting")
+        buffer = b""
+        skipping_value = False
+        try:
+            with self.state_path.open("rb") as source, temp_path.open("wb") as target:
+                while True:
+                    chunk = source.read(1024 * 1024)
+                    eof = not chunk
+                    data = buffer + chunk
+                    buffer = b""
+                    while data:
+                        if skipping_value:
+                            closing_quote = data.find(b'"')
+                            if closing_quote < 0:
+                                data = b""
+                                break
+                            data = data[closing_quote + 1:]
+                            skipping_value = False
+                            continue
+
+                        position = data.find(marker)
+                        if position >= 0:
+                            target.write(data[:position])
+                            target.write(b'"original_hex": null')
+                            data = data[position + len(marker):]
+                            skipping_value = True
+                            continue
+
+                        if eof:
+                            target.write(data)
+                            data = b""
+                        else:
+                            tail = min(len(data), len(marker) - 1)
+                            target.write(data[:-tail] if tail else data)
+                            buffer = data[-tail:] if tail else b""
+                            data = b""
+                    if eof:
+                        break
+            if skipping_value:
+                raise LoaderError("Installed-mod state ended inside an inline backup value")
+            # Validate the compacted file before replacing the user's state.
+            json.loads(temp_path.read_text(encoding="utf-8"))
+            os.replace(temp_path, self.state_path)
+        finally:
+            if temp_path.exists():
+                temp_path.unlink()
+
     def _load_state(self) -> list[InstallRecord]:
         if not self.state_path.is_file():
             return []
         try:
+            self._compact_legacy_state()
             raw = json.loads(self.state_path.read_text(encoding="utf-8"))
             return [
                 InstallRecord(
@@ -455,7 +579,7 @@ class Loader:
                 )
                 for rec in raw
             ]
-        except (json.JSONDecodeError, OSError):
+        except (json.JSONDecodeError, OSError, MemoryError):
             return []
 
     def _save_state(self, records: list[InstallRecord]) -> None:
@@ -470,9 +594,9 @@ class Loader:
             }
             for rec in records
         ]
-        self.state_path.write_text(
-            json.dumps(payload, indent=2) + "\n", encoding="utf-8"
-        )
+        temp_path = self.state_path.with_suffix(".json.tmp")
+        temp_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        os.replace(temp_path, self.state_path)
 
     def list_installed(self) -> list[InstallRecord]:
         return self._load_state()
@@ -517,16 +641,29 @@ class Loader:
                      if self._name_of_package(p) == name), None)
         if path is None:
             raise LoaderError(f"Unknown mod: {name}")
-        from .nexus import NEXUS_GAME_ID
+        from .nexus import NEXUS_GAME_ID, NexusClient
+        resolved_game_id = game_id or NEXUS_GAME_ID
+        nexus_meta: dict = {}
+        try:
+            nexus_meta = NexusClient().mod(int(mod_id), int(resolved_game_id))
+        except Exception:
+            # Saving the public page link must still work while Nexus is down.
+            pass
         tmp = path.with_suffix(".tmp.jmod")
         with zipfile.ZipFile(path) as src, zipfile.ZipFile(tmp, "w") as dst:
             manifest = json.loads(src.read("manifest.json").decode("utf-8"))
             manifest["nexus"] = {
-                "game_id": game_id or NEXUS_GAME_ID,
+                "game_id": resolved_game_id,
                 "mod_id": int(mod_id),
             }
             if version is not None:
                 manifest["version"] = str(version)
+            elif nexus_meta.get("version"):
+                manifest["version"] = str(nexus_meta["version"])
+            if nexus_meta.get("author"):
+                manifest["author"] = str(nexus_meta["author"])
+            if nexus_meta.get("summary") and not manifest.get("description"):
+                manifest["description"] = str(nexus_meta["summary"])
             for item in src.infolist():
                 data = src.read(item.filename)
                 if item.filename == "manifest.json":
@@ -578,7 +715,7 @@ class Loader:
     def check_updates(self, client=None) -> list[dict]:
         """Check all .jmod packages that carry a Nexus id for updates."""
         from .nexus import NexusClient
-        client = client or NexusClient(mods_root=self.mods_root)
+        client = client or NexusClient()
         results: list[dict] = []
         for path in self.discover_packages():
             try:
@@ -591,7 +728,7 @@ class Loader:
                 results.append({"name": pkg.name, "path": str(path),
                                 "has_update": False, "mod_id": None, "error": "no nexus id"})
                 continue
-            game_id = nexus.get("game_id", 2996)
+            game_id = nexus.get("game_id", 9408)
             mod_id = nexus.get("mod_id")
             current = pkg.version
             latest = None
@@ -641,25 +778,38 @@ class Loader:
             )
 
         editor = ForgeEditor(forge_path)
-        offsets = editor.validate_resource_offsets(target.resource_id)
-        if not offsets:
+        entries = editor.find_resource_entries(target.resource_id)
+        if not entries:
             raise LoaderError(f"{pkg.name}: resource 0x{target.resource_id:016X} not found in {target.forge}")
 
         occurrence = target.occurrence
-        if occurrence >= len(offsets):
+        if occurrence >= len(entries):
             raise LoaderError(
-                f"{pkg.name}: occurrence {occurrence} out of range (found {len(offsets)})"
+                f"{pkg.name}: occurrence {occurrence} out of range (found {len(entries)})"
             )
-        offset = offsets[occurrence]
+        offset, stored_size = entries[occurrence]
+
+        if len(target.replacement) != stored_size:
+            raise LoaderError(
+                f"{pkg.name}: replacement size {len(target.replacement)} != stored size {stored_size} "
+                f"(same-size in-place replacement required)"
+            )
+        if (
+            target.expected_original_size is not None
+            and stored_size != target.expected_original_size
+        ):
+            raise LoaderError(
+                f"{pkg.name}: stored size {stored_size} != expected original size "
+                f"{target.expected_original_size}"
+            )
 
         with forge_path.open("rb") as handle:
             handle.seek(offset)
-            original = handle.read(len(target.replacement))
+            original = handle.read(stored_size)
 
-        if len(original) != len(target.replacement):
+        if len(original) != stored_size:
             raise LoaderError(
-                f"{pkg.name}: replacement size {len(target.replacement)} != stored size {len(original)} "
-                f"(same-size in-place replacement required; larger patches need the injector stage)"
+                f"{pkg.name}: stored resource is truncated at 0x{offset:X}"
             )
 
         if target.expected_original and original != target.expected_original:
@@ -683,7 +833,7 @@ class Loader:
             "occurrence": occurrence,
             "offset": offset,
             "backup": str(backup_path),
-            "original_hex": original.hex(),
+            "original_hex": None,
         }
 
         # Apply.
@@ -750,7 +900,7 @@ class Loader:
             "needle": target.needle.hex(),
             "patch": target.patch.hex(),
             "backup": str(backup_path),
-            "original_hex": original.hex(),
+            "original_hex": None,
         }
 
         with forge_path.open("r+b") as handle:
@@ -987,7 +1137,7 @@ class Loader:
                 "mode": "loose-file", "file": "versionHooked.dll", "dest": "versionHooked.dll",
                 "requested_dest": "version.dll",
                 "backup": str(hook_backup) if hook_backup else None,
-                "original_hex": hook_original.hex() if hook_original is not None else None,
+                "original_hex": None,
                 "installed_sha256": incoming_hash, "dll_kind": incoming_info["kind"],
                 "chain_loader_dest": "version.dll",
                 "chain_loader_sha256": existing_info["sha256"],
@@ -1025,7 +1175,7 @@ class Loader:
             return {
                 "mode": "loose-file", "file": "version.dll", "dest": "version.dll",
                 "backup": str(backup_path) if backup_path else None,
-                "original_hex": original.hex() if original is not None else None,
+                "original_hex": None,
                 "installed_sha256": incoming_hash, "dll_kind": incoming_info["kind"],
                 "external_chain_hook": external_hook,
                 "external_chain_sha256": existing_info["sha256"] if external_hook else None,
@@ -1074,7 +1224,7 @@ class Loader:
             "file": dest.as_posix(),
             "dest": target.dest,
             "backup": str(backup_path) if backup_path else None,
-            "original_hex": original.hex() if original is not None else None,
+            "original_hex": None,
             "installed_sha256": hashlib.sha256(target.replacement).hexdigest(),
         }
 

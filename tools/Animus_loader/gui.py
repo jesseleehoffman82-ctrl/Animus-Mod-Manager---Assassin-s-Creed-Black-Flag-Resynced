@@ -1,4 +1,4 @@
-"""Animus Mod Manager - legacy desktop GUI for Assassin's Creed Black Flag Resynced.
+"""Animus Mod & Outfit Manager - legacy desktop GUI for Assassin's Creed Black Flag Resynced.
 
 AC Black Flag themed UI with:
   * Game folder detection
@@ -19,7 +19,7 @@ from tkinter import filedialog, messagebox, ttk
 from .core import DEFAULT_GAME_DIR, Loader, LoaderError
 from .outfits import OutfitError
 from .packs import PackError, PackManager
-from .nexus import NexusClient, NexusError, save_api_key, find_api_key
+from .nexus import NexusClient, NexusError
 
 
 class LoaderApp:
@@ -31,7 +31,7 @@ class LoaderApp:
 
     def __init__(self, root: tk.Tk):
         self.root = root
-        self.root.title("Animus Mod Manager")
+        self.root.title("Animus Mod & Outfit Manager")
         self.root.geometry("900x650")
         self.root.minsize(780, 550)
         
@@ -189,7 +189,7 @@ class LoaderApp:
         title_label.pack(side="left")
 
         subtitle_label = ttk.Label(header_frame,
-                                   text="ANIMUS MOD MANAGER\nFOR ASSASSIN'S CREED BLACK FLAG RESYNCED",
+                                   text="ANIMUS MOD & OUTFIT MANAGER\nFOR ASSASSIN'S CREED BLACK FLAG RESYNCED",
                                    font=('Segoe UI', 10),
                                    foreground=self.COLOR_GOLD)
         subtitle_label.pack(side="left", padx=(15, 0), pady=(5, 0))
@@ -242,16 +242,9 @@ class LoaderApp:
                                             command=self.check_updates)
         self.check_updates_btn.pack(side="left", padx=(0, 10))
 
-        ttk.Label(self.top_controls, text="Nexus API key:",
+        ttk.Label(self.top_controls, text="Public Nexus metadata",
                   background=self.COLOR_BG, foreground=self.COLOR_TEXT,
                   font=('Segoe UI', 8)).pack(side="left")
-        self.key_entry_val = tk.StringVar(
-            value=find_api_key(self.loader.mods_root) or "")
-        key_entry = ttk.Entry(self.top_controls, textvariable=self.key_entry_val,
-                              width=18, show="*")
-        key_entry.pack(side="left", padx=(6, 4))
-        ttk.Button(self.top_controls, text="SAVE", style='SmallDark.TButton',
-                   command=self.save_key).pack(side="left")
 
         # ---- MODS tab ----
         mods_tab = ttk.Frame(self.nb)
@@ -298,7 +291,7 @@ class LoaderApp:
         footer = ttk.Frame(self.root, padding=(15, 5, 15, 5))
         footer.pack(fill="x")
 
-        footer_label = ttk.Label(footer, text="ANIMUS MOD MANAGER v1.0.0",
+        footer_label = ttk.Label(footer, text="ANIMUS MOD & OUTFIT MANAGER v1.0.0",
                                 font=('Segoe UI', 8), foreground=self.COLOR_TEXT_DIM)
         footer_label.pack(side="left")
 
@@ -382,7 +375,7 @@ class LoaderApp:
     def _finish_err(self, message: str) -> None:
         self.set_busy(False)
         self.log(f"ERROR: {message}", "err")
-        messagebox.showerror("Animus Mod Manager", message)
+        messagebox.showerror("Animus Mod & Outfit Manager", message)
 
     # ------------------------------------------------------------------ #
     # actions
@@ -406,7 +399,7 @@ class LoaderApp:
         if exe.is_file():
             self.status_var.set("Game found")
             self.status_label.configure(style='GreenStatus.TLabel')
-            self.root.title(f"Animus Mod Manager - {game_dir}")
+            self.root.title(f"Animus Mod & Outfit Manager - {game_dir}")
         else:
             self.status_var.set("Game NOT found - choose folder")
             self.status_label.configure(style='StatusLabel.TLabel')
@@ -443,7 +436,7 @@ class LoaderApp:
     def _selected_item(self) -> tuple | None:
         selection = self.tree.selection()
         if not selection:
-            messagebox.showinfo("Animus Mod Manager", "Select a mod first.")
+            messagebox.showinfo("Animus Mod & Outfit Manager", "Select a mod first.")
             return None
         return self.tree.item(selection[0])
     
@@ -554,36 +547,15 @@ class LoaderApp:
         if tab:
             self.nb.select(tab)
 
-    def save_key(self) -> None:
-        key = getattr(self, "key_entry_val", None)
-        if key is None:
-            self.log("Nexus API key field is not shown yet.")
-            return
-        key = key.get().strip()
-        if not key:
-            self.log("Nexus API key empty; cleared saved key.")
-            save_api_key(self.loader.mods_root, "")
-            return
-        save_api_key(self.loader.mods_root, key)
-        self.log("Nexus API key saved.")
-
     def check_updates(self) -> None:
         """Check all mods/packs that have a Nexus id (threaded)."""
-        api_key = find_api_key(self.loader.mods_root)
-        if not api_key:
-            messagebox.showinfo(
-                "Animus Mod Manager",
-                "No Nexus API key set. Get a free key from your Nexus account "
-                "('API Access' tab), paste it into the field, and SAVE.")
-            return
-        self.log("Checking for updates...")
+        self.log("Checking public Nexus metadata for updates...")
         import threading
-        threading.Thread(target=self._check_updates_worker, args=(api_key,),
-                         daemon=True).start()
+        threading.Thread(target=self._check_updates_worker, daemon=True).start()
 
-    def _check_updates_worker(self, api_key: str) -> None:
+    def _check_updates_worker(self) -> None:
         try:
-            client = NexusClient(api_key=api_key, mods_root=self.loader.mods_root)
+            client = NexusClient()
             mod_results = self.loader.check_updates(client=client)
             pack_results = self.manager.check_updates(client=client)
         except Exception as exc:  # pragma: no cover
@@ -695,7 +667,7 @@ class LoaderApp:
     def _selected_pack_id(self, cat: str):
         name = self._selected_pack_name(cat)
         if not name:
-            messagebox.showinfo("Animus Mod Manager",
+            messagebox.showinfo("Animus Mod & Outfit Manager",
                                 f"Select a pack in the {self._cat_label(cat)} tab first.")
             return None
         for pack in self.manager.list_packs(category=cat):
@@ -716,7 +688,7 @@ class LoaderApp:
         try:
             pack = self.manager.install(Path(chosen), category=cat)
         except PackError as exc:
-            messagebox.showerror("Animus Mod Manager", str(exc))
+            messagebox.showerror("Animus Mod & Outfit Manager", str(exc))
             return
         self.log(f"INSTALLED '{pack['pack'].name}' ({len(pack['pack'].slots)} slot(s)). "
                  f"Enabled + applied.", "ok")
@@ -764,7 +736,7 @@ class LoaderApp:
         try:
             result = self.manager.apply_staged(cat)
         except PackError as exc:
-            messagebox.showerror("Animus Mod Manager", str(exc))
+            messagebox.showerror("Animus Mod & Outfit Manager", str(exc))
             return
         if result.get("packs"):
             n = len(result["packs"])
@@ -778,13 +750,13 @@ class LoaderApp:
         self.refresh_texture_tabs()
 
     def revert_textures(self) -> None:
-        if not messagebox.askyesno("Animus Mod Manager",
+        if not messagebox.askyesno("Animus Mod & Outfit Manager",
                                    "Revert the active texture pack back to vanilla?"):
             return
         try:
             result = self.manager.revert_all()
         except (PackError, OSError) as exc:
-            messagebox.showerror("Animus Mod Manager", str(exc))
+            messagebox.showerror("Animus Mod & Outfit Manager", str(exc))
             return
         self.log(f"Reverted {result['reverted']} write(s) to vanilla.", "ok")
         self.refresh_texture_tabs()
@@ -795,13 +767,13 @@ class LoaderApp:
         if not pack_id:
             return
         pack = self.manager.get_pack(pack_id)
-        if not messagebox.askyesno("Animus Mod Manager",
+        if not messagebox.askyesno("Animus Mod & Outfit Manager",
                                    f"Revert '{pack.name}' back to vanilla?"):
             return
         try:
             result = self.manager.revert_pack(pack_id)
         except (PackError, OSError) as exc:
-            messagebox.showerror("Animus Mod Manager", str(exc))
+            messagebox.showerror("Animus Mod & Outfit Manager", str(exc))
             return
         self.log(f"Reverted '{pack.name}' ({result['reverted']} write(s)).", "ok")
         for issue in result.get("issues", []):

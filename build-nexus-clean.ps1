@@ -1,10 +1,11 @@
 param(
-    [string]$Version = "0.1.2-beta",
+    [string]$Version = "",
     [switch]$RequireTrustedSignature
 )
 
 $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+if (-not $Version) { $Version = (Get-Content -LiteralPath (Join-Path $projectRoot "VERSION.txt") -Raw).Trim() }
 $releaseRoot = Join-Path $projectRoot "release"
 $sourceName = "Animus-Mod-Manager-$Version-win-x64"
 $source = Join-Path $releaseRoot $sourceName
@@ -121,6 +122,33 @@ $userModFiles = @(
 )
 if ($userModFiles.Count) {
     throw "Nexus package contains managed user files; refusing to publish."
+}
+
+# Nexus public applications must never ship a user's personal credentials or
+# the retired authentication/download implementation. Keep this check close to
+# packaging so a future regression cannot silently reach an upload archive.
+$applicationSourceExtensions = @(".py", ".js", ".html", ".cs")
+$legacyNexusPatterns = @(
+    "NEXUS_API_KEY",
+    "nexus_key.json",
+    "sso.nexusmods.com",
+    '"apikey"',
+    "urlretrieve(",
+    "latest_file("
+)
+$legacyNexusHits = @()
+Get-ChildItem -LiteralPath $clean -File -Recurse -Force |
+    Where-Object { $_.Extension.ToLowerInvariant() -in $applicationSourceExtensions } |
+    ForEach-Object {
+        $sourceFile = $_
+        foreach ($pattern in $legacyNexusPatterns) {
+            if (Select-String -LiteralPath $sourceFile.FullName -SimpleMatch -Pattern $pattern -Quiet) {
+                $legacyNexusHits += "$([IO.Path]::GetRelativePath($clean, $sourceFile.FullName)): $pattern"
+            }
+        }
+    }
+if ($legacyNexusHits.Count) {
+    throw "Legacy Nexus authentication/download code remains: $($legacyNexusHits -join '; ')"
 }
 
 $python = Join-Path $clean "runtime\python\python.exe"

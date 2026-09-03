@@ -397,12 +397,13 @@ class PackManager:
         import tarfile
         import zipfile
         suffix = src.suffix.lower()
+        root = dest.resolve()
         if suffix == ".zip":
             with zipfile.ZipFile(src) as z:
                 for member in z.infolist():
                     # guard against zip-slip (path traversal)
                     target = (dest / member.filename).resolve()
-                    if not str(target).startswith(str(dest.resolve())):
+                    if target != root and root not in target.parents:
                         raise PackError(f"Unsafe path in archive: {member.filename}")
                     if member.is_dir():
                         target.mkdir(parents=True, exist_ok=True)
@@ -413,12 +414,21 @@ class PackManager:
         elif suffix == ".tar" or suffix == ".gz" or suffix == ".tgz":
             with tarfile.open(src) as t:
                 for member in t.getmembers():
+                    if not (member.isdir() or member.isreg()):
+                        raise PackError(f"Archive contains an unsupported link or device: {member.name}")
                     member_path = Path(member.name)
-                    if member.isdir() or member.isreg():
-                        target = (dest / member_path).resolve()
-                        if not str(target).startswith(str(dest.resolve())):
-                            raise PackError(f"Unsafe path in archive: {member.name}")
-                t.extractall(dest)
+                    target = (dest / member_path).resolve()
+                    if target != root and root not in target.parents:
+                        raise PackError(f"Unsafe path in archive: {member.name}")
+                    if member.isdir():
+                        target.mkdir(parents=True, exist_ok=True)
+                        continue
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    source_file = t.extractfile(member)
+                    if source_file is None:
+                        raise PackError(f"Could not read archive member: {member.name}")
+                    with source_file, open(target, "wb") as destination_file:
+                        shutil.copyfileobj(source_file, destination_file)
         elif suffix in {".7z", ".rar"}:
             exe = PackManager._find_7z()
             if exe:
@@ -443,7 +453,6 @@ class PackManager:
 
             # Reject links and any result resolving outside the temporary
             # extraction directory before the importer reads the content.
-            root = dest.resolve()
             for extracted in dest.rglob("*"):
                 if extracted.is_symlink():
                     raise PackError(f"Archive contains an unsupported link: {extracted.name}")
@@ -1078,7 +1087,7 @@ class PackManager:
         # prevent the link being saved while Nexus is unavailable.
         try:
             from .nexus import NexusClient
-            nexus_meta = NexusClient(mods_root=self.mods_root).mod(
+            nexus_meta = NexusClient().mod(
                 int(mod_id), int(resolved_game_id))
             author = nexus_meta.get("uploaded_by") or nexus_meta.get("author")
             if author:
@@ -1107,7 +1116,7 @@ class PackManager:
         current, latest, has_update, error}.
         """
         from .nexus import NexusClient
-        client = client or NexusClient(mods_root=self.mods_root)
+        client = client or NexusClient()
         results: list[dict] = []
         for pack in self.list_packs():
             meta = self._pack_meta(pack)

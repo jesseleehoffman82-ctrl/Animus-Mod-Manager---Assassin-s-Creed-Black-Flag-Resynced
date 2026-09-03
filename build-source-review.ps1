@@ -1,9 +1,10 @@
 param(
-    [string]$Version = "0.1.2-beta"
+    [string]$Version = ""
 )
 
 $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+if (-not $Version) { $Version = (Get-Content -LiteralPath (Join-Path $projectRoot "VERSION.txt") -Raw).Trim() }
 $releaseRoot = Join-Path $projectRoot "release"
 $publicVersion = if ($Version -match '-beta$') { $Version -replace '-beta$', '' } else { $Version }
 $sourceName = "Animus-Mod-Manager-$publicVersion-Source"

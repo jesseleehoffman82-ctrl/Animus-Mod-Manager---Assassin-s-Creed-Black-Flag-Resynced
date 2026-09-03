@@ -1,8 +1,8 @@
-# Animus Mod Manager
+# Animus Mod & Outfit Manager
 
 ## Mods, outfits, weapons and crew textures in one manager
 
-**Animus Mod Manager** is a portable mod-management tool built specifically
+**Animus Mod & Outfit Manager** is a portable mod-management tool built specifically
 for **Assassin's Creed IV: Black Flag Resynced**. It provides one place to
 install and manage general mods, outfit replacements, weapon skins and custom
 crew textures—with reversible deployment, backups and outfit-slot conflict
@@ -12,7 +12,7 @@ This project was created because Black Flag's growing mod scene needed a
 dedicated manager, especially for players who use several outfit replacements
 and do not want to depend on Outfit Workshop for installation.
 
-> **Public beta:** Version 0.1.2 Beta is an early testing release. Keep the
+> **Public beta:** Version 0.1.5 Beta is an early testing release. Keep the
 > game closed while Animus is changing files, retain the included backup
 > folders and report any failed installation with the activity-log text.
 
@@ -195,7 +195,7 @@ credentials with a report.
 
 ## Credits and legal notice
 
-Animus Mod Manager is a community-created project and is not affiliated with
+Animus Mod & Outfit Manager is a community-created project and is not affiliated with
 or endorsed by Ubisoft or Nexus Mods. Assassin's Creed and related names and
 imagery belong to their respective owners. Included third-party runtime
 components retain their own licenses, which are supplied with the download.

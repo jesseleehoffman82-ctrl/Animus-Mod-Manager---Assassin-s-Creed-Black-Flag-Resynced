@@ -1,6 +1,6 @@
-ANIMUS MOD MANAGER - SECURITY AND PACKAGE NOTES
+ANIMUS MOD & OUTFIT MANAGER - SECURITY AND PACKAGE NOTES
 
-Animus Mod Manager is a standalone Windows utility for Assassin's Creed IV:
+Animus Mod & Outfit Manager is a standalone Windows utility for Assassin's Creed IV:
 Black Flag Resynced. This portable package is not password protected and does
 not contain nested archives or personal mod data.
 
@@ -15,5 +15,12 @@ memory. When directed by the user, it deploys conventional loose-file mods or
 patches supported game archive data while retaining the information needed to
 disable or restore managed content.
 
-Version: 0.1.2-beta
-Publisher: Animus Mod Manager Project
+NEXUS ACCESS
+The application does not contain, request, transmit, or store a personal Nexus
+API key. It does not use Nexus SSO and does not download files from Nexus Mods.
+Linked-item metadata is read from the public Nexus GraphQL endpoint at
+https://api.nexusmods.com/v2/graphql without authentication. Users download mod
+archives manually in their browser and select those local archives in Animus.
+
+Version: 0.1.5-beta
+Publisher: Animus Mod & Outfit Manager Project

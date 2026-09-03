@@ -1,4 +1,4 @@
-# Animus Mod Manager 0.1.2 Beta
+# Animus Mod & Outfit Manager 0.1.5 Beta
 
 Portable mod manager for Assassin's Creed IV: Black Flag Resynced.
 
@@ -26,3 +26,8 @@ manager.
 
 This is a public beta. Please include the activity-log message and the name of
 the selected mod archive when reporting a problem.
+
+Nexus integration is metadata-only. Animus uses the public Nexus GraphQL
+endpoint without authentication and never asks for or stores an API key.
+Downloads remain manual: download an archive in your browser, then install or
+update it from inside the manager.

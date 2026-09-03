@@ -1,8 +1,8 @@
-#define MyAppName "Animus Mod Manager"
-#define MyAppVersion "0.1.2-beta"
-#define MyAppPublisher "Animus Mod Manager Project"
+#define MyAppName "Animus Mod & Outfit Manager"
+#define MyAppVersion "0.1.5-beta"
+#define MyAppPublisher "Animus Mod & Outfit Manager Project"
 #define MyAppExeName "AnimusModManager.exe"
-#define MySourceDir "..\release\Animus-Mod-Manager-0.1.2-beta-win-x64"
+#define MySourceDir "..\release\Animus-Mod-Manager-0.1.5-beta-win-x64"
 
 [Setup]
 AppId={{C23FBEF0-088A-4500-9259-663C0D0ECA59}
@@ -10,22 +10,22 @@ AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-AppCopyright=Copyright © 2026 Animus Mod Manager Project
-VersionInfoVersion=0.1.2.0
-VersionInfoProductVersion=0.1.2.0
+AppCopyright=Copyright © 2026 Animus Mod & Outfit Manager Project
+VersionInfoVersion=0.1.5.0
+VersionInfoProductVersion=0.1.5.0
 VersionInfoCompany={#MyAppPublisher}
-VersionInfoDescription=Installer for Animus Mod Manager
+VersionInfoDescription=Installer for Animus Mod & Outfit Manager
 SetupArchitecture=x64
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 DefaultDirName={localappdata}\Programs\Animus Mod Manager
-DefaultGroupName=Animus Mod Manager
+DefaultGroupName=Animus Mod & Outfit Manager
 DisableProgramGroupPage=yes
 AllowNoIcons=yes
 OutputDir=..\release
-OutputBaseFilename=Animus-Mod-Manager-0.1.2-Beta-Setup
+OutputBaseFilename=Animus-Mod-Manager-0.1.5-Beta-Setup
 SetupIconFile=..\desktop\assets\animus.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma2/ultra64
@@ -61,11 +61,16 @@ Name: "{app}\mods\textures"; Flags: uninsneveruninstall
 Name: "{app}\mods\textures\backups"; Flags: uninsneveruninstall
 
 [Icons]
-Name: "{group}\Animus Mod Manager"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"
-Name: "{autodesktop}\Animus Mod Manager"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{group}\Animus Mod & Outfit Manager"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"
+Name: "{autodesktop}\Animus Mod & Outfit Manager"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "Launch Animus Mod Manager"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Description: "Launch Animus Mod & Outfit Manager"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
+
+[InstallDelete]
+; Remove shortcuts created under the former display name during an upgrade.
+Type: files; Name: "{autodesktop}\Animus Mod Manager.lnk"
+Type: files; Name: "{group}\Animus Mod Manager.lnk"
 
 [UninstallDelete]
 ; Only clear disposable logs/cache. The managed mod library and backups remain.
@@ -136,7 +141,7 @@ begin
   if not IsDotNet10DesktopRuntimeInstalled() then
   begin
     if MsgBox(
-      'Animus Mod Manager requires Microsoft .NET 10 Desktop Runtime (x64).' + #13#10 + #13#10 +
+      'Animus Mod & Outfit Manager requires Microsoft .NET 10 Desktop Runtime (x64).' + #13#10 + #13#10 +
       'Choose Yes to open the official Microsoft download page. Install the Desktop Runtime, then run Setup again.',
       mbInformation, MB_YESNO) = IDYES then
       ShellExec('', 'https://dotnet.microsoft.com/en-us/download/dotnet/10.0', '', '', SW_SHOWNORMAL, ewNoWait, ErrorCode);
@@ -150,12 +155,12 @@ begin
   if InstalledVersion <> '' then
     VersionText := 'Version ' + InstalledVersion + ' is already installed.'
   else
-    VersionText := 'Animus Mod Manager is already installed.';
+    VersionText := 'Animus Mod & Outfit Manager is already installed.';
 
   Result := MsgBox(
     VersionText + #13#10 + #13#10 +
     'Location:' + #13#10 + InstallPath + #13#10 + #13#10 +
-    'Choose Yes to reinstall or repair Animus Mod Manager. Program files will be overwritten, while managed mods, settings and backups will be preserved.' + #13#10 + #13#10 +
+    'Choose Yes to reinstall or repair Animus Mod & Outfit Manager. Program files will be overwritten, while managed mods, settings and backups will be preserved.' + #13#10 + #13#10 +
     'Choose No to cancel Setup.',
     mbConfirmation, MB_YESNO) = IDYES;
 end;

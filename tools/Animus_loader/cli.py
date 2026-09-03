@@ -1,4 +1,4 @@
-"""Animus Mod Manager - command-line interface.
+"""Animus Mod & Outfit Manager - command-line interface.
 
 Commands:
   list          show installed mods
@@ -20,7 +20,7 @@ from pathlib import Path
 from .core import DEFAULT_GAME_DIR, Loader, LoaderError
 from .outfits import OutfitError
 from .packs import CATEGORY_OUTFIT, CATEGORY_WEAPON, PackError, PackManager, NEXUS_GAME_ID
-from .nexus import NexusClient, NexusError, save_api_key
+from .nexus import NexusClient, NexusError
 
 
 def _loader(args) -> Loader:
@@ -258,13 +258,6 @@ def cmd_pack_check_updates(category: str, label: str) -> callable:
     return run
 
 
-def cmd_api_key(args) -> int:
-    mgr = _packs(args)
-    save_api_key(mgr.mods_root, args.key)
-    print("Nexus API key saved.")
-    return 0
-
-
 def cmd_mod_set_nexus(args) -> int:
     loader = _loader(args)
     loader.set_nexus(args.name, args.mod_id, game_id=args.game_id or NEXUS_GAME_ID,
@@ -293,47 +286,8 @@ def cmd_mod_check_updates(args) -> int:
 
 
 def cmd_mod_update(args) -> int:
-    loader = _loader(args)
-    path = None
-    for p in loader.discover_packages():
-        try:
-            if loader.read_package(p).name == args.name:
-                path = p
-                break
-        except LoaderError:
-            continue
-    if path is None:
-        print(f"ERROR: no mod named '{args.name}'", file=sys.stderr)
-        return 1
-    from .nexus import NexusClient, find_api_key, NexusError
-    api_key = find_api_key(loader.mods_root)
-    if not api_key:
-        print("ERROR: no Nexus API key set. Use 'api-key <key>' first.", file=sys.stderr)
-        return 1
-    pkg = loader.read_package(path)
-    nexus = (pkg.manifest or {}).get("nexus")
-    if not nexus:
-        print(f"ERROR: '{args.name}' has no Nexus link. Use 'mod-set-nexus'.", file=sys.stderr)
-        return 1
-    client = NexusClient(api_key=api_key, mods_root=loader.mods_root)
-    try:
-        latest = client.latest_file(nexus["mod_id"], nexus.get("game_id", NEXUS_GAME_ID))
-    except NexusError as exc:
-        print(f"ERROR: {exc}", file=sys.stderr)
-        return 1
-    if not latest or not latest.get("download_url"):
-        print("ERROR: no downloadable update found (may need premium Nexus).", file=sys.stderr)
-        return 1
-    import urllib.request
-    target = loader.packages_dir / (latest["name"] or f"{args.name}-update.jmod")
-    print(f"Downloading {latest['name']} ...")
-    try:
-        urllib.request.urlretrieve(latest["download_url"], target)
-    except Exception as exc:  # noqa: BLE001
-        print(f"ERROR: download failed: {exc}", file=sys.stderr)
-        return 1
-    backups = loader.apply(target, priority=0)
-    print(f"Updated '{pkg.name}' ({len(backups)} target(s) patched).")
+    print("Direct Nexus downloads are disabled. Download the update in your browser, "
+          "then use the manager's Update action to select the replacement archive.")
     return 0
 
 
@@ -457,7 +411,7 @@ def _add_pack_group(sub, name: str, help_text: str,
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Animus Mod Manager")
+    parser = argparse.ArgumentParser(description="Animus Mod & Outfit Manager")
     parser.add_argument(
         "--game-dir",
         default=str(DEFAULT_GAME_DIR),
@@ -487,10 +441,6 @@ def build_parser() -> argparse.ArgumentParser:
     g = sub.add_parser("game-dir", help="Show the game folder")
     g.set_defaults(func=cmd_game_dir)
 
-    key = sub.add_parser("api-key", help="Save the Nexus API key (for update checks)")
-    key.add_argument("key")
-    key.set_defaults(func=cmd_api_key)
-
     mn = sub.add_parser("mod-set-nexus", help="Attach a Nexus mod id to a .jmod mod")
     mn.add_argument("name")
     mn.add_argument("mod_id", type=int)
@@ -501,7 +451,7 @@ def build_parser() -> argparse.ArgumentParser:
     mc = sub.add_parser("mod-check-updates", help="Check .jmod mods on Nexus for updates")
     mc.set_defaults(func=cmd_mod_check_updates)
 
-    mu = sub.add_parser("mod-update", help="Download + install the latest version of a mod")
+    mu = sub.add_parser("mod-update", help="Explain the manual Nexus update workflow")
     mu.add_argument("name")
     mu.set_defaults(func=cmd_mod_update)
 

@@ -1,7 +1,7 @@
-ANIMUS MOD MANAGER 0.1.2 BETA - DEVELOPMENT NOTES
+ANIMUS MOD & OUTFIT MANAGER 0.1.5 BETA - DEVELOPMENT NOTES
 ============================================================
 
-Animus Mod Manager was created through a human-directed, AI-assisted software
+Animus Mod & Outfit Manager was created through a human-directed, AI-assisted software
 development process. The project owner defined the product requirements,
 interface design, installation behavior, supported game content, testing cases,
 and release goals.
@@ -33,7 +33,7 @@ SOURCE AND VERIFICATION
 -----------------------
 
 This source archive contains the authored C#, Python, HTML, CSS, and JavaScript
-files corresponding to version 0.1.2 Beta, along with regression tests and
+files corresponding to version 0.1.5 Beta, along with regression tests and
 BUILD-INSTRUCTIONS.txt. Official redistributable runtimes and third-party
 compiled utilities are intentionally excluded from the source-only archive.
 

@@ -1,4 +1,4 @@
-"""Animus Mod Manager - desktop shell hosting the HTML/CSS/JS frontend.
+"""Animus Mod & Outfit Manager - desktop shell hosting the HTML/CSS/JS frontend.
 
 This is the new entry point. It embeds the web UI (tools/Animus_loader/web/)
 inside a native, frameless pywebview window and exposes the existing Python
@@ -33,14 +33,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     crash_log = LOG_PATH.open("a", encoding="utf-8")
     faulthandler.enable(crash_log)
-    logging.info("Starting Animus Mod Manager web interface")
+    logging.info("Starting Animus Mod & Outfit Manager web interface")
 
     loader = Loader(game_dir=DEFAULT_GAME_DIR)
     manager = PackManager(game_dir=loader.game_dir, mods_root=loader.mods_root)
     api = Api(loader, manager)
 
     window = webview.create_window(
-        "Animus Mod Manager",
+        "Animus Mod & Outfit Manager",
         url=str(INDEX_HTML),
         js_api=api,
         width=1360,

@@ -68,8 +68,8 @@ button { color: inherit; }
 .brand-divider { height: 36px; width: 1px; margin: 0 12px; background: linear-gradient(transparent, var(--gold-line), transparent); }
 .product-title h1 {
   color: #c8a06f;
-  font-size: clamp(15px, 1.3vw, 18px);
-  letter-spacing: 1.2px;
+  font-size: clamp(13px, 1.12vw, 16px);
+  letter-spacing: 1px;
   font-weight: 600;
   margin: 0;
 }

@@ -73,7 +73,8 @@ def main() -> int:
     assert (GAME_DIR / "version.dll").read_bytes() == replacement, "file not replaced"
     assert (GAME_DIR / "versionHooked.dll").read_bytes() == preexisting, "existing proxy not chained"
     assert entries[0]["mode"] == "loose-file"
-    assert entries[0]["original_hex"] == preexisting.hex(), "original not captured"
+    assert entries[0]["original_hex"] is None, "backup bytes must not be duplicated in state"
+    assert Path(entries[0]["backup"]).read_bytes() == preexisting, "original backup not captured"
     assert entries[0]["compatibility"] == "asi-loader-with-preserved-proxy"
 
     # 2. Remove - should restore preexisting and remove temporary chain copy.

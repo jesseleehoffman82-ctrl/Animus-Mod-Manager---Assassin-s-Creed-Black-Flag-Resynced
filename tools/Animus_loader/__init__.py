@@ -1,4 +1,4 @@
-"""Animus Mod Manager package."""
+"""Animus Mod & Outfit Manager package."""
 
 from .core import (
     FORMAT,

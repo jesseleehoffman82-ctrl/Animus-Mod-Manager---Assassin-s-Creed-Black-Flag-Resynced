@@ -1,7 +1,8 @@
 const fallbackState = {
+  app_version: "",
   game_dir: "",
   game_found: false,
-  nexus_key_set: false,
+  nexus_metadata_available: true,
   mods: [],
   outfits: [], weapons: [], crew: [],
 };
@@ -110,6 +111,10 @@ function packLabel() {
 }
 
 function render() {
+  const version = String(app.state.app_version || "").trim();
+  $("#app-version").textContent = version
+    ? `v${version.replace(/-beta$/i, " BETA")}`
+    : "BETA";
   $("#game-path").value = app.state.game_dir || "";
   const status = $("#game-status");
   status.classList.toggle("missing", !app.state.game_found);
@@ -118,9 +123,6 @@ function render() {
   status.title = proxy?.present
     ? `version.dll: ${String(proxy.kind || "unknown").replaceAll("-", " ")}${proxy.hook_present ? " + chained proxy" : ""}`
     : "No version.dll proxy detected";
-  const nexusButton = $("#connect-nexus-button");
-  nexusButton.classList.toggle("connected", Boolean(app.state.nexus_key_set));
-  $("#nexus-connect-label").textContent = app.state.nexus_key_set ? "NEXUS CONNECTED" : "CONNECT NEXUS";
   $("#launch-game-button").disabled = !app.state.game_found;
   $$(".tab").forEach(tab => tab.classList.toggle("active", tab.dataset.tab === app.tab));
 
@@ -434,19 +436,7 @@ $("#browse-button").onclick = async event => {
 };
 $("#detect-button").onclick = async () => { const state = await call("detect_game_dir"); if (state) window.animusSetState(state); };
 $("#refresh-button").onclick = refresh;
-$("#connect-nexus-button").onclick = async event => {
-  const button = event.currentTarget;
-  if (app.state.nexus_key_set) return;
-  button.disabled = true;
-  $("#nexus-connect-label").textContent = "WAITING FOR BROWSER…";
-  try {
-    const state = await call("connect_nexus");
-    if (state?.game_dir) window.animusSetState(state);
-  } finally {
-    button.disabled = false;
-    render();
-  }
-};
+$("#nexus-page-button").onclick = () => call("open_nexus_page");
 $("#launch-game-button").onclick = async event => {
   const button = event.currentTarget;
   const label = $("#launch-game-label");
@@ -610,13 +600,13 @@ $(".titlebar").addEventListener("pointerdown", event => {
 window.addEventListener("pywebviewready", async () => {
   app.bridgeReady = true;
   await refresh();
-  addLog({ tag: "info", message: "Animus Mod Manager started" });
+  addLog({ tag: "info", message: "Animus Mod & Outfit Manager started" });
 });
 
 render();
 if (window.chrome?.webview) {
   app.bridgeReady = true;
-  refresh().then(() => addLog({ tag: "info", message: "Animus Mod Manager started" }));
+  refresh().then(() => addLog({ tag: "info", message: "Animus Mod & Outfit Manager started" }));
 } else if (!window.pywebview) {
   addLog({ tag: "info", message: "UI preview mode — backend bridge is not connected" });
 }

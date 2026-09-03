@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "0.1.2-beta",
+    [string]$Version = "",
     [switch]$NoRestore,
     [string]$SigningThumbprint = "",
     [string]$TimestampUrl = "http://timestamp.digicert.com"
@@ -7,6 +7,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+if (-not $Version) { $Version = (Get-Content -LiteralPath (Join-Path $projectRoot "VERSION.txt") -Raw).Trim() }
+$versionParts = [regex]::Matches($Version, '\d+') | Select-Object -First 3 | ForEach-Object Value
+while ($versionParts.Count -lt 3) { $versionParts += '0' }
+$numericVersion = ($versionParts -join '.') + '.0'
 $env:DOTNET_CLI_HOME = Join-Path $projectRoot ".dotnet-cli"
 $env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE = "1"
 $env:DOTNET_CLI_TELEMETRY_OPTOUT = "1"
@@ -43,6 +47,7 @@ $appOutput = $stage
 dotnet publish (Join-Path $projectRoot "desktop\AnimusModManager.csproj") `
     -c Release -r win-x64 --self-contained false --nologo `
     $restoreOption `
+    -p:Version=$Version -p:AssemblyVersion=$numericVersion -p:FileVersion=$numericVersion `
     -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false `
     -o $appOutput
 if ($LASTEXITCODE -ne 0) { throw "Animus manager publish failed with exit code $LASTEXITCODE." }

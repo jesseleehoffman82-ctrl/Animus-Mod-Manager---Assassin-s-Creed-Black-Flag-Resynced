@@ -1,13 +1,13 @@
-ANIMUS MOD MANAGER 0.1.2 BETA - SOURCE CODE
+ANIMUS MOD & OUTFIT MANAGER 0.1.5 BETA - SOURCE CODE
 ============================================================
 
 The complete source corresponding to this release is provided as a separate
-file on the Animus Mod Manager Nexus Mods page:
+file on the Animus Mod & Outfit Manager Nexus Mods page:
 
 https://www.nexusmods.com/assassinscreedblackflagresynced/mods/458?tab=files
 
 Source filename:
-Animus-Mod-Manager-0.1.2-Source.zip
+Animus-Mod-Manager-0.1.5-Source.zip
 
 The source archive contains the C# desktop host, Python backend, HTML/CSS/
 JavaScript interface, regression tests, third-party notices, and complete
@@ -20,7 +20,7 @@ Microsoft .NET 10 SDK x64
 Native host build command:
 dotnet publish desktop/AnimusModManager.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false -o build
 
-Animus Mod Manager patches and restores selected game files on disk. It does
+Animus Mod & Outfit Manager patches and restores selected game files on disk. It does
 not inject code into the running game process.
 
 Public application SHA-256 values are published beside each release archive.
