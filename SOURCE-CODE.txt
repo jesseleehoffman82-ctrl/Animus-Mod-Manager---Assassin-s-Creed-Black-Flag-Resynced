@@ -1,10 +1,12 @@
 ANIMUS MOD & OUTFIT MANAGER 0.1.5 BETA - SOURCE CODE
 ============================================================
 
-The complete source corresponding to this release is provided as a separate
-file on the Animus Mod & Outfit Manager Nexus Mods page:
+The complete public source repository and build history are available here:
 
-https://www.nexusmods.com/assassinscreedblackflagresynced/mods/458?tab=files
+https://github.com/jesseleehoffman82-ctrl/Animus-Mod-Manager---Assassin-s-Creed-Black-Flag-Resynced
+
+A matching source-only archive may also be uploaded beside the application on
+Nexus Mods for reviewer convenience:
 
 Source filename:
 Animus-Mod-Manager-0.1.5-Source.zip
