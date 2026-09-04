@@ -22,5 +22,5 @@ Linked-item metadata is read from the public Nexus GraphQL endpoint at
 https://api.nexusmods.com/v2/graphql without authentication. Users download mod
 archives manually in their browser and select those local archives in Animus.
 
-Version: 0.1.5-beta
+Version: 0.1.7-beta
 Publisher: Animus Mod & Outfit Manager Project

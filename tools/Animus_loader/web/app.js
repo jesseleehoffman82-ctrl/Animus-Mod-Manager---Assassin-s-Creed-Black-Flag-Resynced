@@ -4,7 +4,7 @@ const fallbackState = {
   game_found: false,
   nexus_metadata_available: true,
   mods: [],
-  outfits: [], weapons: [], crew: [],
+  outfits: [], weapons: [], crew: [], sails: [],
 };
 
 const app = {
@@ -29,7 +29,8 @@ if (window.chrome?.webview) {
     if (message.event === "install_progress") {
       const label = message.category === "weapon"
         ? "INSTALLING WEAPON…"
-        : message.category === "crew" ? "INSTALLING CREW…" : "INSTALLING OUTFIT…";
+        : message.category === "crew" ? "INSTALLING CREW…"
+        : message.category === "sail" ? "INSTALLING SAILS…" : "INSTALLING OUTFIT…";
       const installLabel = $("#install-label");
       if (installLabel) installLabel.textContent = label;
       return;
@@ -98,16 +99,25 @@ function rowTooltip(row) {
 
 function currentRows() { return app.state[app.tab] || []; }
 function selectedRow() { return currentRows().find(row => (row.name || row.id) === app.selected); }
+function isTexturePackRow(row) { return row?.managed_type === "texture-pack"; }
+function itemTypeForRow(row) {
+  if (isTexturePackRow(row)) return row.pack_category || "general";
+  return app.tab === "mods" ? "mod" : packCategory();
+}
 function isManagerState(value) {
   return Boolean(value && typeof value === "object" &&
     Object.prototype.hasOwnProperty.call(value, "game_found") &&
     Object.prototype.hasOwnProperty.call(value, "game_dir"));
 }
 function packCategory() {
-  return app.tab === "outfits" ? "outfit" : app.tab === "weapons" ? "weapon" : "crew";
+  return app.tab === "outfits" ? "outfit"
+    : app.tab === "weapons" ? "weapon"
+    : app.tab === "crew" ? "crew" : "sail";
 }
 function packLabel() {
-  return app.tab === "outfits" ? "OUTFIT PACK" : app.tab === "weapons" ? "WEAPON PACK" : "CREW PACK";
+  return app.tab === "outfits" ? "OUTFIT PACK"
+    : app.tab === "weapons" ? "WEAPON PACK"
+    : app.tab === "crew" ? "CREW PACK" : "SAIL PACK";
 }
 
 function render() {
@@ -120,9 +130,12 @@ function render() {
   status.classList.toggle("missing", !app.state.game_found);
   status.querySelector("span").textContent = app.state.game_found ? "GAME FOUND" : "NOT FOUND";
   const proxy = app.state.proxy_status;
-  status.title = proxy?.present
+  const build = app.state.game_build ? `Steam build ${app.state.game_build}` : "Game build unavailable";
+  const executable = app.state.game_executable || "game executable unavailable";
+  const proxyText = proxy?.present
     ? `version.dll: ${String(proxy.kind || "unknown").replaceAll("-", " ")}${proxy.hook_present ? " + chained proxy" : ""}`
     : "No version.dll proxy detected";
+  status.title = `${build} · ${executable}\n${proxyText}`;
   $("#launch-game-button").disabled = !app.state.game_found;
   $$(".tab").forEach(tab => tab.classList.toggle("active", tab.dataset.tab === app.tab));
 
@@ -140,21 +153,24 @@ function render() {
 function renderTable() {
   const isMods = app.tab === "mods";
   const isOutfits = app.tab === "outfits";
+  const isSails = app.tab === "sails";
+  const isVanillaReplacement = isOutfits || isSails;
+  const replacementKind = isSails ? "sail" : "outfit";
   $("#table-head").innerHTML = isMods
     ? `<tr><th class="col-enabled">ENABLED</th><th>MOD</th><th class="col-version">VERSION</th><th class="col-author">AUTHOR</th><th class="col-targets">TARGETS</th><th class="col-menu"></th></tr>`
-    : `<tr><th class="col-enabled">ENABLED</th><th>${isOutfits ? "OUTFIT MOD" : app.tab === "weapons" ? "WEAPON SKIN" : "CREW TEXTURE"}</th><th class="col-author">AUTHOR</th><th class="${isOutfits ? "col-replaces" : "col-targets"}">${isOutfits ? "REPLACES VANILLA OUTFIT" : "TEXTURE SLOTS"}</th><th class="col-menu"></th></tr>`;
+    : `<tr><th class="col-enabled">ENABLED</th><th>${isOutfits ? "OUTFIT MOD" : app.tab === "weapons" ? "WEAPON SKIN" : app.tab === "crew" ? "CREW TEXTURE" : "SAIL DESIGN"}</th><th class="col-author">AUTHOR</th><th class="${isVanillaReplacement ? "col-replaces" : "col-targets"}">${isOutfits ? "REPLACES VANILLA OUTFIT" : isSails ? "REPLACES VANILLA SAIL" : "TEXTURE SLOTS"}</th><th class="col-menu"></th></tr>`;
 
   const rows = currentRows();
   const replacementOwners = new Map();
-  if (isOutfits) {
-    for (const outfit of rows) {
-      for (const replacement of Array.isArray(outfit.replaces) ? outfit.replaces : []) {
+  if (isVanillaReplacement) {
+    for (const pack of rows) {
+      for (const replacement of Array.isArray(pack.replaces) ? pack.replaces : []) {
         const slot = String(replacement || "").trim();
         if (!slot) continue;
         const normalizedSlot = normalizeReplacementSlot(slot);
         if (!normalizedSlot) continue;
         if (!replacementOwners.has(normalizedSlot)) replacementOwners.set(normalizedSlot, []);
-        replacementOwners.get(normalizedSlot).push(String(outfit.name || outfit.id || "Unnamed Outfit Mod"));
+        replacementOwners.get(normalizedSlot).push(String(pack.name || pack.id || `Unnamed ${replacementKind} mod`));
       }
     }
   }
@@ -173,14 +189,14 @@ function renderTable() {
       <td class="col-targets">${escapeHtml(row.targets ?? 0)}</td>
       <td class="col-menu"><button class="menu-button" data-menu="${escapeHtml(key)}">•••</button></td>
     </tr>`;
-    const replacements = isOutfits && Array.isArray(row.replaces)
+    const replacements = isVanillaReplacement && Array.isArray(row.replaces)
       ? row.replaces.map(value => String(value || "").trim()).filter(Boolean)
       : [];
-    const fallbackSharing = isOutfits
+    const fallbackSharing = isVanillaReplacement
       ? [...new Set(replacements.flatMap(slot => replacementOwners.get(normalizeReplacementSlot(slot)) || []))]
           .filter(name => name !== String(row.name || row.id || ""))
       : [];
-    const sharedWith = isOutfits && Array.isArray(row.shared_with) && row.shared_with.length
+    const sharedWith = isVanillaReplacement && Array.isArray(row.shared_with) && row.shared_with.length
       ? row.shared_with
       : fallbackSharing.map(name => {
           const other = rows.find(item => String(item.name || item.id || "") === name);
@@ -190,12 +206,12 @@ function renderTable() {
       `${item.name} (${item.enabled ? "Enabled" : "Disabled"})`);
     const replacementText = replacements.length ? replacements.join(", ") : "Unknown";
     const replacementTitle = sharedWith.length
-      ? `Shared vanilla outfit slot. Also used by:\n${sharedLabels.join("\n")}`
+      ? `Shared vanilla ${replacementKind} slot. Also used by:\n${sharedLabels.join("\n")}`
       : replacements.length
-        ? `Vanilla outfit replaced: ${replacementText}`
-        : "Vanilla outfit replacement could not be identified";
-    const replacementCell = isOutfits
-      ? `<td class="col-replaces ${sharedWith.length ? "shared-replacement" : ""}" title="${escapeHtml(replacementTitle)}"><span>${escapeHtml(replacementText)}</span>${sharedWith.length ? `<span class="shared-marker" aria-label="Shared outfit slot">⇄</span>` : ""}</td>`
+        ? `Vanilla ${replacementKind} replaced: ${replacementText}`
+        : `Vanilla ${replacementKind} replacement could not be identified`;
+    const replacementCell = isVanillaReplacement
+      ? `<td class="col-replaces ${sharedWith.length ? "shared-replacement" : ""}" title="${escapeHtml(replacementTitle)}"><span>${escapeHtml(replacementText)}</span>${sharedWith.length ? `<span class="shared-marker" aria-label="Shared ${replacementKind} slot">⇄</span>` : ""}</td>`
       : `<td class="col-targets">${escapeHtml(row.slots ?? 0)}</td>`;
     return `<tr class="${selected}" data-key="${escapeHtml(key)}" title="${rowTooltip(row)}">
       <td class="col-enabled"><button class="toggle ${enabled}" data-toggle="${escapeHtml(key)}" ${app.packBusy ? "disabled" : ""}>${row.enabled ? "✓" : "−"}</button></td>
@@ -231,7 +247,7 @@ function normalizeState(state) {
     description: String(row?.description || ""),
     dll_compatibility: row?.dll_compatibility ? String(row.dll_compatibility) : null,
   })) : [];
-  for (const category of ["outfits", "weapons", "crew"]) {
+  for (const category of ["outfits", "weapons", "crew", "sails"]) {
     normalized[category] = Array.isArray(normalized[category]) ? normalized[category].map(row => ({
       ...row,
       name: String(row?.name || "Unnamed Pack"),
@@ -275,7 +291,7 @@ function setTab(tab) {
 async function toggleRow(key) {
   const row = currentRows().find(item => (item.name || item.id) === key);
   if (!row) return;
-  if (app.tab === "mods") await call("toggle_mod", row.id || row.name);
+  if (app.tab === "mods" && !isTexturePackRow(row)) await call("toggle_mod", row.id || row.name);
   else {
     if (app.packBusy) return;
     const previousEnabled = row.enabled;
@@ -286,7 +302,7 @@ async function toggleRow(key) {
     app.packBusy = true;
     render();
     try {
-      const state = await call("toggle_pack", packCategory(), row.id, requestedEnabled);
+      const state = await call("toggle_pack", itemTypeForRow(row), row.id, requestedEnabled);
       if (isManagerState(state)) window.animusSetState(state);
       else {
         row.enabled = previousEnabled;
@@ -303,7 +319,7 @@ function showMenu(button, key) {
   app.menuTarget = key;
   const row = currentRows().find(item => (item.name || item.id) === key);
   const menu = $("#context-menu");
-  const itemLabel = app.tab === "mods" ? "Mod" : app.tab === "outfits" ? "Outfit" : app.tab === "weapons" ? "Weapon" : "Crew Pack";
+  const itemLabel = isTexturePackRow(row) ? "Texture Mod" : app.tab === "mods" ? "Mod" : app.tab === "outfits" ? "Outfit" : app.tab === "weapons" ? "Weapon" : app.tab === "crew" ? "Crew Pack" : "Sail Pack";
   $("#update-menu-action span").textContent = `Update ${itemLabel}`;
   $("#open-menu-action span").textContent = `Open ${itemLabel} Folder`;
   $("#uninstall-menu-action span").textContent = `Uninstall ${itemLabel}`;
@@ -317,8 +333,9 @@ function showMenu(button, key) {
 function hideMenu() { $("#context-menu").hidden = true; app.menuTarget = null; }
 
 async function showDetails(name) {
-  const data = await call(app.tab === "mods" ? "get_mod_details" : "get_pack_details", name)
-    || currentRows().find(row => (row.name || row.id) === name);
+  const row = currentRows().find(item => (item.name || item.id) === name);
+  const data = await call(app.tab === "mods" && !isTexturePackRow(row) ? "get_mod_details" : "get_pack_details", row?.id || name)
+    || row;
   if (!data) return;
   const targets = Array.isArray(data.targets) ? data.targets : [];
   const replaces = Array.isArray(data.replaces) && data.replaces.length ? data.replaces.join(", ") : "—";
@@ -483,7 +500,8 @@ $("#uninstall-button").onclick = async () => {
   }
   const row = selectedRow();
   if (!row) return;
-  await call("uninstall_mod", row.name);
+  if (isTexturePackRow(row)) await call("remove_pack", row.id);
+  else await call("uninstall_mod", row.name);
   app.selected = null;
   await refresh();
 };
@@ -495,7 +513,7 @@ $("#context-menu").onclick = async event => {
   const name = app.menuTarget; hideMenu(); if (!action || !name) return;
   if (action === "update") {
     const row = currentRows().find(item => (item.name || item.id) === name);
-    const itemType = app.tab === "mods" ? "mod" : packCategory();
+    const itemType = itemTypeForRow(row);
     const itemId = row?.id || name;
     if (itemId) await call("update_item", itemType, itemId);
     await refresh();
@@ -505,7 +523,7 @@ $("#context-menu").onclick = async event => {
     const value = await requestRename(row?.name || name);
     const newName = value?.trim();
     if (row && newName && newName !== row.name) {
-      const itemType = app.tab === "mods" ? "mod" : packCategory();
+      const itemType = itemTypeForRow(row);
       const state = await call("rename_item", itemType, row.id || row.name, newName);
       if (state?.game_dir) window.animusSetState(state);
       app.selected = newName;
@@ -513,23 +531,21 @@ $("#context-menu").onclick = async event => {
     }
   }
   if (action === "uninstall") {
-    if (app.tab === "mods") {
-      const row = currentRows().find(item => (item.name || item.id) === name);
+    const row = currentRows().find(item => (item.name || item.id) === name);
+    if (app.tab === "mods" && !isTexturePackRow(row)) {
       await call("uninstall_mod", row?.id || name);
     } else {
-      const row = currentRows().find(item => (item.name || item.id) === name);
       if (row) await call("remove_pack", row.id);
     }
     app.selected = null;
     await refresh();
   }
   if (action === "open") {
-    if (app.tab === "mods") {
-      const row = currentRows().find(item => (item.name || item.id) === name);
+    const row = currentRows().find(item => (item.name || item.id) === name);
+    if (app.tab === "mods" && !isTexturePackRow(row)) {
       await call("open_mod_folder", row?.id || name);
     }
     else {
-      const row = currentRows().find(item => (item.name || item.id) === name);
       if (row) await call("open_pack_folder", row.id);
     }
   }
@@ -544,7 +560,7 @@ $("#context-menu").onclick = async event => {
           const url = new URL(value.trim());
           const match = url.pathname.match(/^\/assassinscreedblackflagresynced\/mods\/(\d+)/i);
           if (!url.hostname.endsWith("nexusmods.com") || !match) throw new Error("not a Black Flag Resynced mod URL");
-          const state = await call("set_nexus_link", app.tab === "mods" ? "mod" : packCategory(), row?.id || name, Number(match[1]));
+          const state = await call("set_nexus_link", itemTypeForRow(row), row?.id || name, Number(match[1]));
           if (state) window.animusSetState(state);
         } catch (error) {
           addLog({ tag: "err", message: `Invalid Nexus page: ${error.message}` });

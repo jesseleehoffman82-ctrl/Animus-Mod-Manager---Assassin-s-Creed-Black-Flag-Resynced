@@ -24,8 +24,8 @@ from datetime import datetime
 import webview
 
 from .core import DEFAULT_GAME_DIR, Loader, LoaderError
-from .game_launch import launch_game as launch_selected_game
-from .packs import PackError, PackManager, CATEGORY_CREW, CATEGORY_OUTFIT, CATEGORY_WEAPON
+from .game_launch import game_executable, launch_game as launch_selected_game, steam_build_id
+from .packs import PackError, PackManager, CATEGORY_CREW, CATEGORY_OUTFIT, CATEGORY_SAIL, CATEGORY_WEAPON
 from .nexus import NexusClient, NexusError
 
 
@@ -107,14 +107,17 @@ class Api:
     # ------------------------------------------------------------------ #
     def get_state(self) -> dict:
         game_dir = self.loader.game_dir
-        exe = game_dir / "ACBlackFlag.exe"
+        exe = game_executable(game_dir)
         return {
             "game_dir": str(game_dir),
-            "game_found": exe.is_file(),
+            "game_found": exe is not None,
+            "game_executable": exe.name if exe else "",
+            "game_build": steam_build_id(game_dir),
             "mods": self.list_mods(),
             "outfits": self.list_packs(CATEGORY_OUTFIT),
             "weapons": self.list_packs(CATEGORY_WEAPON),
             "crew": self.list_packs(CATEGORY_CREW),
+            "sails": self.list_packs(CATEGORY_SAIL),
             "proxy_status": self.loader.proxy_status(),
             "nexus_metadata_available": True,
         }
@@ -208,9 +211,9 @@ class Api:
         return self.get_state()
 
     def launch_game(self) -> dict:
-        executable = self.loader.game_dir / "ACBlackFlag.exe"
-        if not executable.is_file():
-            self._log(f"Game executable not found: {executable}", "err")
+        executable = game_executable(self.loader.game_dir)
+        if executable is None:
+            self._log(f"Game executable not found in: {self.loader.game_dir}", "err")
             return {"ok": False}
         launch_method = launch_selected_game(self.loader.game_dir)
         suffix = " through Steam (controller-safe)." if launch_method == "steam" else "."

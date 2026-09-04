@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.1.7 Beta — 2026-09-03
+
+- Added an Animus-styled sail-target picker during sail installation so users
+  can choose which vanilla sail cosmetic a custom design replaces.
+- Added 45 game-validated sail targets from the current Title Update 1.0.7
+  archive, including advanced emblem layers.
+- Multiple sail designs can remain installed and enabled when assigned to
+  different targets; designs assigned to the same target use the existing
+  conflict warning and replacement workflow.
+- Sail updates now retain their previously selected vanilla target.
+- Kept Jackdaw Drydock Studio's separate-slot hull/sail injection system fully
+  independent; Animus continues to use reversible vanilla replacements.
+
+## 0.1.6 Beta — 2026-09-03
+
+- Added a dedicated Sails tab with install, update, rename, enable/disable,
+  uninstall, Nexus metadata, and restore-to-vanilla workflows.
+- Added vanilla sail replacement labels and shared-slot detection, including
+  disabled designs that still occupy the same sail slot.
+- Added the outfit-style conflict prompt so enabling or installing a competing
+  sail design can disable the active design before deployment.
+- Added managed general texture replacements to the Mods tab for ship assets
+  that do not belong to the dedicated outfit, weapon, crew, or sail views.
+- Added category validation that redirects confidently identified texture
+  packs to the correct tab instead of deploying them under the wrong system.
+- Added a reviewed legacy mapping for the Black Cannons mod's five recommended
+  Gold Jackdaw weapon targets, removing its Ship Workshop dependency.
+- Added compatibility mappings for established Sail Workshop-style PNG names,
+  including Black Striped Sails BF Logo, which now targets the Jackdaw-only Red
+  Striped Sails slot without requiring material IDs in the archive filename.
+- Verified all mapped outfit, weapon, crew, sail, and ship-texture targets
+  against Title Update 1.0.7 (Steam build 24833802). Stale material pointers
+  from a replaced game archive are now retired safely before enabled packs are
+  rebuilt against the updated FORGE layout.
+
 ## 0.1.5 Beta — 2026-09-03
 
 - Replaced the retired personal-key and Nexus SSO integration with public,

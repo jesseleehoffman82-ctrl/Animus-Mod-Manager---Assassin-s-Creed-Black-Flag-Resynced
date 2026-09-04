@@ -25,7 +25,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
 from Animus_loader import outfits  # noqa: E402
 from Animus_loader.forge import ForgeArchive, Oodle  # noqa: E402
 from Animus_loader.texture import parse_dds, plan_texture  # noqa: E402
-from Animus_loader.packs import CATEGORY_OUTFIT, CATEGORY_WEAPON, PackManager  # noqa: E402
+from Animus_loader.general_texture_catalog import target_for_general_filename  # noqa: E402
+from Animus_loader.sail_catalog import (  # noqa: E402
+    get_sail_target,
+    sail_targets,
+    target_for_sail_filename,
+)
+from Animus_loader.packs import (  # noqa: E402
+    CATEGORY_OUTFIT,
+    CATEGORY_GENERAL,
+    CATEGORY_SAIL,
+    CATEGORY_WEAPON,
+    PackError,
+    PackManager,
+)
 
 TEST_ROOT = Path(__file__).resolve().parent / "_test_outfits"
 GAME_DIR = TEST_ROOT / "game"
@@ -138,6 +151,17 @@ def build_forge():
 
 
 def main() -> int:
+    selectable_sails = sail_targets()
+    assert len(selectable_sails) == 45
+    assert len({target.id for target in selectable_sails}) == len(selectable_sails)
+    assert get_sail_target("COMMON") == get_sail_target("common")
+    assert get_sail_target("common").display_name == "White / Common Sails"
+    assert get_sail_target("spanish") is None  # stored in a different FORGE
+    sail_target = target_for_sail_filename("Black_Striped_Sails_BF_Logo.png")
+    assert sail_target is not None
+    assert sail_target.material_id == 0x22063685111
+    assert sail_target.display_name == "Red Striped Sails"
+    assert target_for_sail_filename("Black_Striped_Sails_BF_Logo.png.png") == sail_target
     if TEST_ROOT.exists():
         shutil.rmtree(TEST_ROOT)
     GAME_DIR.mkdir(parents=True)
@@ -244,13 +268,60 @@ def main() -> int:
     assert pmgr.active_pack_id() == outfit.id
     assert mgr.active_outfit() == outfit.id
 
-    # 6. Final revert to vanilla.
+    # 6. Sails mirror outfit behavior: their vanilla replacement is read from
+    # workshop metadata, and sharing includes disabled designs for UI warnings.
+    sail_a_src = TEST_ROOT / "pack_sail" / "BlackSails"
+    sail_b_src = TEST_ROOT / "pack_sail" / "StripedSails"
+    sail_a_src.mkdir(parents=True)
+    sail_b_src.mkdir(parents=True)
+    (sail_a_src / f"sail_0x{MAT:X}_slot0.dds").write_bytes(dds)
+    (sail_b_src / f"sail_0x{MAT:X}_slot0.dds").write_bytes(dds)
+    (sail_a_src / "README.txt").write_text(
+        "SAIL WORKSHOP export -- Jackdaw Common Sails\n", encoding="utf-8")
+    (sail_b_src / "README.txt").write_text(
+        "Replaces vanilla sail: Jackdaw Common Sails\n", encoding="utf-8")
+    sail_a = pmgr.import_pack(sail_a_src, name="Black Sails", category=CATEGORY_SAIL)
+    sail_b = pmgr.import_pack(sail_b_src, name="Striped Sails", category=CATEGORY_SAIL)
+    assert pmgr._pack_meta(sail_a)["replaces"] == ["Jackdaw Common Sails"]
+    sharing = pmgr.sharing_packs(sail_a)
+    assert [item["id"] for item in sharing] == [sail_b.id]
+    assert sharing[0]["enabled"] is False, "disabled sail sharing must remain visible"
+    pmgr.set_enabled(sail_b.id, True)
+    enabled_conflicts = pmgr.enabled_conflicts(sail_a)
+    assert [item["id"] for item in enabled_conflicts] == [sail_b.id]
+    pmgr.set_enabled(sail_b.id, False)
+
+    # General ship textures belong in Mods, while category validation keeps a
+    # clearly labelled cannon pack out of the wardrobe tabs.
+    cannon_src = TEST_ROOT / "pack_general" / "Black Cannons"
+    cannon_src.mkdir(parents=True)
+    (cannon_src / f"black_cannon_0x{MAT:X}_slot0.dds").write_bytes(dds)
+    try:
+        pmgr.import_pack(cannon_src, name="Wrong Tab", category=CATEGORY_OUTFIT)
+        raise AssertionError("a cannon texture must not install from Outfits")
+    except PackError as exc:
+        assert "Mods tab" in str(exc)
+    cannon = pmgr.import_pack(cannon_src, name="Black Cannons", category=CATEGORY_GENERAL)
+    assert cannon.category == CATEGORY_GENERAL
+    assert cannon in pmgr.list_packs(CATEGORY_GENERAL)
+    assert target_for_general_filename("Dark Lower Cannons.png").material_id == 0x22EDF5469D7
+
+    design_only = TEST_ROOT / "pack_general" / "Dark Cannons"
+    design_only.mkdir(parents=True)
+    Image.fromarray(png_arr).save(design_only / "Dark Deck Details.png")
+    try:
+        pmgr.import_pack(design_only, category=CATEGORY_GENERAL)
+        raise AssertionError("an unaddressed Workshop PNG must not be patched by guesswork")
+    except PackError as exc:
+        assert "vanilla game targets could not be identified" in str(exc)
+
+    # 7. Final revert to vanilla.
     rev = pmgr.revert_all()
     assert FORGE.read_bytes() == orig, "forge not restored to original bytes after weapon/outfit cycle"
     assert pmgr._load_journal() is None
     assert pmgr.active_pack_id() is None
 
-    # 7. One-click install from a .zip archive (the Nexus download shape).
+    # 8. One-click install from a .zip archive (the Nexus download shape).
     import zipfile
     zsrc = TEST_ROOT / "pack_zip" / "download"
     zdir = zsrc / "assin_black_flag" / "outfit"
@@ -275,7 +346,7 @@ def main() -> int:
     assert FORGE.read_bytes() == orig, "forge not restored after zip install revert"
     assert pmgr.active_pack_id() is None
 
-    # 8. MO2-style staged apply: enable TWO packs touching the same slot, the
+    # 9. MO2-style staged apply: enable TWO packs touching the same slot, the
     #    bottom-most (higher priority) wins; disable one -> re-apply clean.
     a = mgr.import_outfit(src, name="Outfit A")
     b = mgr.import_outfit(png_src, name="Outfit B")   # different bytes, same slot
@@ -320,7 +391,7 @@ def main() -> int:
     assert FORGE.read_bytes() == orig, "forge not restored after staged apply/revert"
     assert pmgr._load_journal() is None
 
-    # 9. Per-pack revert: apply ONE pack and revert it cleanly.
+    # 10. Per-pack revert: apply ONE pack and revert it cleanly.
     # First clear any leftover enabled packs from earlier sections.
     for pid in list(pmgr._staged(CATEGORY_OUTFIT)):
         pmgr.set_enabled(pid, False)
@@ -336,6 +407,32 @@ def main() -> int:
     assert res_p["reverted"] >= 2, f"revert_pack should restore external mips: {res_p}"
     assert pmgr2._load_journal() is None, "journal should be gone after reverting only pack"
     assert FORGE.read_bytes() == orig, "forge must be vanilla after per-pack revert of sole pack"
+
+    # 11. A title update may repoint a material after Animus applied it. The
+    # old appended material is then detached and must never be relinked over the
+    # update. External mips that are still ours can be restored before the pack
+    # is rebuilt against the new archive layout.
+    pmgr2.apply_staged(CATEGORY_OUTFIT)
+    updated_archive = ForgeArchive(FORGE, Oodle(GAME_DIR))
+    update_material_offset = updated_archive.append_block(material)
+    updated_archive.repoint_toc(MAT, update_material_offset, len(material))
+    update_size = FORGE.stat().st_size
+    rebased = pmgr2.revert_all()
+    assert rebased["detached_after_game_update"] == 1
+    assert FORGE.stat().st_size == update_size, "detached update data must not be truncated"
+    rebased_archive = ForgeArchive(FORGE, Oodle(GAME_DIR))
+    assert rebased_archive.read_toc_row(MAT) == (update_material_offset, len(material))
+    assert rebased_archive.read_material(MAT) == material
+    assert rebased_archive.read_raw(rid0b) == ext0, "active external mip should be restored"
+    assert pmgr2._load_journal() is None
+
+    rebuilt = pmgr2.apply_staged(CATEGORY_OUTFIT)
+    assert rebuilt["materials"] == 1, "enabled pack should rebuild on the updated archive"
+    pmgr2.set_enabled(a2.id, False)
+    pmgr2.apply_staged(CATEGORY_OUTFIT)
+    final_archive = ForgeArchive(FORGE, Oodle(GAME_DIR))
+    assert final_archive.read_material(MAT) == material
+    assert pmgr2._load_journal() is None
 
     print("OUTFIT TESTS PASSED")
     return 0

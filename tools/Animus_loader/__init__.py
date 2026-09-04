@@ -14,7 +14,7 @@ from .core import (
 )
 from .forge import ForgeArchive, Oodle
 from .outfits import OutfitError, OutfitManager
-from .packs import CATEGORY_CREW, CATEGORY_OUTFIT, CATEGORY_WEAPON, Pack, PackError, PackManager
+from .packs import CATEGORY_CREW, CATEGORY_GENERAL, CATEGORY_OUTFIT, CATEGORY_SAIL, CATEGORY_WEAPON, Pack, PackError, PackManager
 from .nexus import NEXUS_GAME_ID, NexusClient, NexusError
 
 __all__ = [
@@ -35,6 +35,8 @@ __all__ = [
     "CATEGORY_OUTFIT",
     "CATEGORY_WEAPON",
     "CATEGORY_CREW",
+    "CATEGORY_SAIL",
+    "CATEGORY_GENERAL",
     "Pack",
     "PackError",
     "PackManager",

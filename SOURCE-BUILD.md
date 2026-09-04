@@ -1,7 +1,7 @@
-# Building Animus Mod & Outfit Manager 0.1.5 Beta
+# Building Animus Mod & Outfit Manager 0.1.7 Beta
 
 This source package corresponds to the public Windows x64 release of Animus
-Mod Manager 0.1.5 Beta.
+Mod Manager 0.1.7 Beta.
 
 ## Requirements
 

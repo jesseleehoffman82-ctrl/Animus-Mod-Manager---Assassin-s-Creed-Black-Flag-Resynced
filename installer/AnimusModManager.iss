@@ -1,8 +1,8 @@
 #define MyAppName "Animus Mod & Outfit Manager"
-#define MyAppVersion "0.1.5-beta"
+#define MyAppVersion "0.1.7-beta"
 #define MyAppPublisher "Animus Mod & Outfit Manager Project"
 #define MyAppExeName "AnimusModManager.exe"
-#define MySourceDir "..\release\Animus-Mod-Manager-0.1.5-beta-win-x64"
+#define MySourceDir "..\release\Animus-Mod-Manager-0.1.7-beta-win-x64"
 
 [Setup]
 AppId={{C23FBEF0-088A-4500-9259-663C0D0ECA59}
@@ -11,8 +11,8 @@ AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppCopyright=Copyright © 2026 Animus Mod & Outfit Manager Project
-VersionInfoVersion=0.1.5.0
-VersionInfoProductVersion=0.1.5.0
+VersionInfoVersion=0.1.7.0
+VersionInfoProductVersion=0.1.7.0
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription=Installer for Animus Mod & Outfit Manager
 SetupArchitecture=x64
@@ -25,7 +25,7 @@ DefaultGroupName=Animus Mod & Outfit Manager
 DisableProgramGroupPage=yes
 AllowNoIcons=yes
 OutputDir=..\release
-OutputBaseFilename=Animus-Mod-Manager-0.1.5-Beta-Setup
+OutputBaseFilename=Animus-Mod-Manager-0.1.7-Beta-Setup
 SetupIconFile=..\desktop\assets\animus.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma2/ultra64

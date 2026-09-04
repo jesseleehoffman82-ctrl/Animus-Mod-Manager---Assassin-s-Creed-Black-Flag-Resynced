@@ -15,9 +15,10 @@ from datetime import datetime
 from pathlib import Path
 
 from .core import DEFAULT_GAME_DIR, Loader, LoaderError
-from .game_launch import launch_game as launch_selected_game
+from .game_launch import game_executable, launch_game as launch_selected_game, steam_build_id
 from .nexus import NexusClient, mod_page_url
-from .packs import CATEGORY_CREW, CATEGORY_OUTFIT, CATEGORY_WEAPON, PackError, PackManager
+from .packs import CATEGORY_CREW, CATEGORY_GENERAL, CATEGORY_OUTFIT, CATEGORY_SAIL, CATEGORY_WEAPON, PackError, PackManager
+from .sail_catalog import sail_targets
 
 ROOT = Path(__file__).resolve().parents[2]
 MODS_ROOT = ROOT / "mods"
@@ -132,6 +133,21 @@ class DesktopRpc:
                 "category": package.category,
                 "path": str(path),
             })
+        staged = set(self.manager._staged(CATEGORY_GENERAL))
+        for pack in self.manager.list_packs(CATEGORY_GENERAL):
+            meta = self.manager._pack_meta(pack)
+            result.append({
+                "id": pack.id,
+                "name": pack.name,
+                "version": meta.get("version", ""),
+                "author": meta.get("author", ""),
+                "description": meta.get("description", "Managed general texture replacement."),
+                "nexus": self._nexus_info(meta),
+                "targets": len(pack.slots),
+                "enabled": pack.id in staged,
+                "managed_type": "texture-pack",
+                "pack_category": CATEGORY_GENERAL,
+            })
         return result
 
     def list_packs(self, category: str) -> list[dict]:
@@ -165,14 +181,18 @@ class DesktopRpc:
         return result
 
     def state(self) -> dict:
+        executable = game_executable(self.game_dir)
         return {
             "app_version": _app_version(),
             "game_dir": str(self.game_dir),
-            "game_found": (self.game_dir / "ACBlackFlag.exe").is_file(),
+            "game_found": executable is not None,
+            "game_executable": executable.name if executable else "",
+            "game_build": steam_build_id(self.game_dir),
             "mods": self.list_mods(),
             "outfits": self.list_packs(CATEGORY_OUTFIT),
             "weapons": self.list_packs(CATEGORY_WEAPON),
             "crew": self.list_packs(CATEGORY_CREW),
+            "sails": self.list_packs(CATEGORY_SAIL),
             "proxy_status": self.loader.proxy_status(),
             "nexus_metadata_available": True,
         }
@@ -183,6 +203,20 @@ class DesktopRpc:
                 self.log("Refreshed.")
             state = self.state()
             return state, None
+
+        if method == "get_sail_targets":
+            return {
+                "targets": [
+                    {
+                        "id": target.id,
+                        "name": target.display_name,
+                        "kind": target.kind,
+                        "resource_id": f"0x{target.texture_id:X}",
+                    }
+                    for target in sail_targets()
+                ],
+                "default_id": "common",
+            }, None
 
         if method in {"set_game_dir", "detect_game_dir"}:
             game_dir = Path(args[0]) if method == "set_game_dir" else DEFAULT_GAME_DIR
@@ -257,7 +291,36 @@ class DesktopRpc:
 
         if method == "install_mod_path":
             source = Path(args[0])
-            target, package, converted = self.loader.import_package(source)
+            try:
+                target, package, converted = self.loader.import_package(source)
+            except LoaderError as mod_error:
+                try:
+                    pack = self.manager.import_pack(source, category=CATEGORY_GENERAL)
+                except PackError as texture_error:
+                    message = str(texture_error)
+                    if "No .dds or .png files found" in message:
+                        raise mod_error
+                    raise texture_error
+                conflicts = self.manager.enabled_conflicts(pack)
+                if conflicts:
+                    return {
+                        "ok": False,
+                        "requires_confirmation": True,
+                        "pending_action": "install",
+                        "pack_id": pack.id,
+                        "pack_name": pack.name,
+                        "category": CATEGORY_GENERAL,
+                        "conflicts": conflicts,
+                    }, None
+                self.manager.activate_imported(pack.id)
+                self.log(
+                    f"Installed general texture mod '{pack.name}' ({len(pack.slots)} slot(s)).",
+                    "ok",
+                )
+                return {
+                    "ok": True, "name": pack.name, "enabled": True,
+                    "managed_type": "texture-pack",
+                }, self.state()
             backups = self.loader.apply(target, priority=0)
             self._log_dll_compatibility(backups)
             if converted:
@@ -331,7 +394,7 @@ class DesktopRpc:
             item_type, item_id, mod_id = str(args[0]), str(args[1]), int(args[2])
             if item_type == "mod":
                 self.loader.set_nexus(item_id, mod_id)
-            elif item_type in {CATEGORY_OUTFIT, CATEGORY_WEAPON, CATEGORY_CREW}:
+            elif item_type in {CATEGORY_OUTFIT, CATEGORY_WEAPON, CATEGORY_CREW, CATEGORY_SAIL, CATEGORY_GENERAL}:
                 self.manager.set_nexus(item_id, mod_id)
             else:
                 raise ValueError(f"Unsupported Nexus item type: {item_type}")
@@ -342,7 +405,7 @@ class DesktopRpc:
             item_type, item_id, new_name = map(str, args[:3])
             if item_type == "mod":
                 self.loader.rename(item_id, new_name)
-            elif item_type in {CATEGORY_OUTFIT, CATEGORY_WEAPON, CATEGORY_CREW}:
+            elif item_type in {CATEGORY_OUTFIT, CATEGORY_WEAPON, CATEGORY_CREW, CATEGORY_SAIL, CATEGORY_GENERAL}:
                 self.manager.rename_pack(item_id, new_name)
             else:
                 raise ValueError(f"Unsupported item type: {item_type}")
@@ -350,17 +413,23 @@ class DesktopRpc:
             return {"ok": True, "name": new_name.strip()}, self.state()
 
         if method == "launch_game":
-            executable = self.game_dir / "ACBlackFlag.exe"
-            if not executable.is_file():
-                raise LoaderError(f"Game executable not found: {executable}")
+            executable = game_executable(self.game_dir)
+            if executable is None:
+                raise LoaderError(f"Game executable not found in: {self.game_dir}")
             launch_method = launch_selected_game(self.game_dir)
             suffix = " through Steam (controller-safe)." if launch_method == "steam" else "."
-            self.log(f"Launching Assassin's Creed Black Flag Resynced{suffix}", "ok")
+            build = steam_build_id(self.game_dir)
+            build_text = f" build {build}" if build else ""
+            self.log(
+                f"Launching Assassin's Creed Black Flag Resynced{build_text} "
+                f"({executable.name}){suffix}", "ok")
             return {"ok": True}, None
 
         if method == "install_pack_path":
             category, path = str(args[0]), Path(args[1])
-            pack = self.manager.import_pack(path, category=category)
+            sail_target_id = str(args[2]) if category == CATEGORY_SAIL and len(args) > 2 else None
+            pack = self.manager.import_pack(
+                path, category=category, sail_target_id=sail_target_id)
             conflicts = self.manager.enabled_conflicts(pack)
             if conflicts:
                 self.log(
@@ -384,7 +453,7 @@ class DesktopRpc:
             category, pack_id = str(args[0]), str(args[1])
             pack = self.manager.get_pack(pack_id)
             if pack is None or pack.category != category:
-                raise PackError("The outfit pack awaiting confirmation could not be found.")
+                raise PackError("The texture pack awaiting confirmation could not be found.")
             result = self.manager.activate_imported(pack_id, disable_conflicts=True)
             disabled = result.get("disabled", [])
             disabled_names = ", ".join(item["name"] for item in disabled)
@@ -398,7 +467,7 @@ class DesktopRpc:
             action = str(args[2]) if len(args) > 2 else "enable"
             pack = self.manager.get_pack(pack_id)
             if pack is None or pack.category != category:
-                raise PackError("The outfit awaiting confirmation could not be found.")
+                raise PackError("The texture pack awaiting confirmation could not be found.")
             result = self.manager.activate_imported(pack_id, disable_conflicts=True)
             disabled = result.get("disabled", [])
             disabled_names = ", ".join(item["name"] for item in disabled)
@@ -411,13 +480,13 @@ class DesktopRpc:
         if method == "cancel_pack_install":
             pack_id = str(args[0])
             pack = self.manager.discard_imported(pack_id)
-            self.log(f"Cancelled installation of '{pack.name}'; existing outfits were left unchanged.", "info")
+            self.log(f"Cancelled installation of '{pack.name}'; existing texture packs were left unchanged.", "info")
             return self.state(), None
 
         if method == "cancel_pack_enable":
             pack = self.manager.get_pack(str(args[0]))
             self.log(
-                f"Kept '{pack.name if pack else str(args[0])}' disabled; existing outfit remained active.",
+                f"Kept '{pack.name if pack else str(args[0])}' disabled; existing texture pack remained active.",
                 "info",
             )
             return self.state(), None
@@ -429,7 +498,16 @@ class DesktopRpc:
                 raise PackError("The texture pack being updated could not be found.")
             was_enabled = old_id in set(self.manager._staged(category))
             old_meta = self.manager._pack_meta(old_pack)
-            new_pack = self.manager.import_pack(source, category=category)
+            # A sail update replaces the design, not the user's chosen vanilla
+            # target. Keep that assignment stable across reinstall/update.
+            retained_sail_target = None
+            if category == CATEGORY_SAIL:
+                retained_sail_target = str(old_meta.get("sail_target_id") or "").strip() or None
+            new_pack = self.manager.import_pack(
+                source,
+                category=category,
+                sail_target_id=retained_sail_target,
+            )
             new_meta_path = new_pack.dir / "meta.json"
             new_meta = self.manager._pack_meta(new_pack)
             for field in ("nexus", "author"):

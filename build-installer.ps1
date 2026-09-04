@@ -58,7 +58,10 @@ $installerSource = [regex]::Replace($installerSource, 'OutputBaseFilename=.*', "
 
 if (Test-Path -LiteralPath $output) { Remove-Item -LiteralPath $output -Force }
 try {
-    & $compiler $generatedScriptPath
+    # Inno prints one line per bundled runtime file (thousands of lines). Keep
+    # release automation responsive when this script is called by the main
+    # public-build workflow.
+    & $compiler --quiet-progress $generatedScriptPath
     if ($LASTEXITCODE -ne 0) { throw "Installer compilation failed with exit code $LASTEXITCODE." }
 }
 finally {

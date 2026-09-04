@@ -1,6 +1,6 @@
-"""Texture pack library and FORGE texture injector (outfits, weapons, and crew).
+"""Texture pack library and FORGE texture injector.
 
-Outfits, weapons, and crew skins are texture packs that write into the same
+Outfits, weapons, crew skins, and sail designs are texture packs that write into the same
 `DataPC_boot.forge` material+slot locations. They share one backend so there is
 exactly ONE active injected set at a time -- activating a weapon reverts any
 active outfit and vice versa. Conflicts are impossible by design.
@@ -31,6 +31,8 @@ from pathlib import Path
 from .forge import ForgeArchive, ForgeError, Oodle, compress_material
 from .texture import PlanItem, parse_filename, plan_texture
 from .crew_catalog import target_for_filename, target_for_texture
+from .general_texture_catalog import target_for_general_filename
+from .sail_catalog import get_sail_target, target_for_sail_filename
 from .nexus import NEXUS_GAME_ID
 
 #: Default archive packs are injected into.
@@ -39,7 +41,9 @@ OUTFIT_FORGE = "DataPC_boot.forge"
 CATEGORY_OUTFIT = "outfit"
 CATEGORY_WEAPON = "weapon"
 CATEGORY_CREW = "crew"
-PACK_CATEGORIES = (CATEGORY_OUTFIT, CATEGORY_WEAPON, CATEGORY_CREW)
+CATEGORY_SAIL = "sail"
+CATEGORY_GENERAL = "general"
+PACK_CATEGORIES = (CATEGORY_OUTFIT, CATEGORY_WEAPON, CATEGORY_CREW, CATEGORY_SAIL, CATEGORY_GENERAL)
 
 
 class PackError(Exception):
@@ -227,7 +231,8 @@ class PackManager:
     # import
     # ------------------------------------------------------------------ #
     def import_pack(self, source_dir: Path, name: str | None = None,
-                    category: str = CATEGORY_OUTFIT) -> Pack:
+                    category: str = CATEGORY_OUTFIT,
+                    sail_target_id: str | None = None) -> Pack:
         """Import a folder/archive of DDS/PNG textures (named mat id + slot).
 
         `source_dir` can be a folder, a `.zip`, a `.7z` (if py7zr installed),
@@ -244,12 +249,14 @@ class PackManager:
                 try:
                     self._extract_archive(source_dir, tmp)
                     detected_name = name or self._archive_pack_name(tmp, source_dir.stem)
-                    return self.import_pack(tmp, name=detected_name, category=category)
+                    return self.import_pack(tmp, name=detected_name, category=category,
+                                            sail_target_id=sail_target_id)
                 finally:
                     shutil.rmtree(tmp, ignore_errors=True)
             if suffix in (".dds", ".png"):
+                self._validate_pack_category([source_dir], category, {}, source_dir.parent)
                 return self._import_files([source_dir], name or source_dir.stem,
-                                          category, str(source_dir), {})
+                                          category, str(source_dir), {}, sail_target_id)
             raise PackError(f"Unsupported pack file: {source_dir.name}")
         if not source_dir.is_dir():
             raise PackError(f"Not a folder or archive: {source_dir}")
@@ -264,8 +271,51 @@ class PackManager:
         if not files:
             raise PackError(f"No .dds or .png files found in {source_dir}")
         metadata = self._pack_metadata(source_dir)
+        self._validate_pack_category(files, category, metadata, source_dir)
         name = (name or metadata.get("name") or source_dir.name).strip() or "Unnamed Pack"
-        return self._import_files(files, name, category, str(source_dir), metadata)
+        return self._import_files(files, name, category, str(source_dir), metadata,
+                                  sail_target_id)
+
+    @staticmethod
+    def _validate_pack_category(files: list[Path], requested: str,
+                                metadata: dict, source_dir: Path) -> None:
+        """Reject only confidently identified packs from an incorrect tab."""
+        declared = str(metadata.get("pack_category") or "").casefold().strip()
+        aliases = {
+            "outfits": CATEGORY_OUTFIT, "outfit": CATEGORY_OUTFIT,
+            "weapons": CATEGORY_WEAPON, "weapon": CATEGORY_WEAPON,
+            "crew": CATEGORY_CREW,
+            "sails": CATEGORY_SAIL, "sail": CATEGORY_SAIL,
+            "general": CATEGORY_GENERAL, "ship": CATEGORY_GENERAL,
+        }
+        detected = aliases.get(declared)
+        names = " ".join([source_dir.name, *(path.name for path in files)]).casefold()
+        if detected is None and any(target_for_filename(path.name) for path in files):
+            detected = CATEGORY_CREW
+        if detected is None:
+            markers = {
+                CATEGORY_SAIL: ("sail",),
+                CATEGORY_GENERAL: ("cannon", "mortar", "swivel", "culverin", "longgun",
+                                   "figurehead", "ship hull", "jackdaw hull", "ship wheel", "cabin"),
+                CATEGORY_OUTFIT: ("outfit", "robe", "redingote"),
+                CATEGORY_WEAPON: ("pistol", "sword", "blade", "weapon skin"),
+            }
+            matches = [kind for kind, words in markers.items()
+                       if any(word in names for word in words)]
+            if len(matches) == 1:
+                detected = matches[0]
+        if detected is not None and detected != requested:
+            destinations = {
+                CATEGORY_OUTFIT: "Outfits",
+                CATEGORY_WEAPON: "Weapons",
+                CATEGORY_CREW: "Crew",
+                CATEGORY_SAIL: "Sails",
+                CATEGORY_GENERAL: "Mods",
+            }
+            raise PackError(
+                f"This appears to be a {detected} texture pack. "
+                f"Install it from the {destinations[detected]} tab instead."
+            )
 
     @staticmethod
     def _pack_metadata(source_dir: Path) -> dict:
@@ -282,6 +332,7 @@ class PackManager:
             "author": ("author", "authors", "uploaded_by", "uploader", "created_by", "creator"),
             "version": ("version", "mod_version"),
             "description": ("description", "summary"),
+            "pack_category": ("pack_category", "texture_category", "category", "type"),
         }
 
         def find_value(data, aliases):
@@ -330,13 +381,23 @@ class PackManager:
             except OSError:
                 continue
 
-        # Outfit Workshop exports name the exact vanilla wardrobe entry in
-        # their first line. Keep that separate from the mod's own display name.
+        # Workshop exports name the exact vanilla wardrobe/sail entry in their
+        # first line. Keep that separate from the mod's own display name.
         for text in readme_texts:
             match = re.search(
-                r"(?im)^OUTFIT WORKSHOP export\s*--\s*(.+?)(?:\s*\(|\s*$)", text)
+                r"(?im)^(?:OUTFIT|SAIL|SHIP) WORKSHOP export\s*--\s*(.+?)(?:\s*\(|\s*$)", text)
+            if not match:
+                match = re.search(
+                    r"(?im)^\s*(?:replaces\s+(?:vanilla\s+)?(?:outfit|sail)|vanilla\s+(?:outfit|sail)|(?:outfit|sail)\s+slot)\s*[:=-]\s*(.+?)\s*$",
+                    text,
+                )
             if match:
                 metadata["replaces"] = [match.group(1).strip()]
+                heading = match.group(0).casefold()
+                if heading.startswith("outfit"):
+                    metadata.setdefault("pack_category", CATEGORY_OUTFIT)
+                elif heading.startswith("sail"):
+                    metadata.setdefault("pack_category", CATEGORY_SAIL)
                 break
 
         if "author" not in metadata:
@@ -462,7 +523,8 @@ class PackManager:
             raise PackError(f"Unsupported archive: {src.name} (use .zip, .7z, or .rar)")
 
     def _import_files(self, files: list, name: str, category: str,
-                      source_label: str, metadata: dict | None = None) -> Pack:
+                      source_label: str, metadata: dict | None = None,
+                      sail_target_id: str | None = None) -> Pack:
         """Validate + copy a set of texture files into a new library pack."""
         import shutil
         pack_id = _make_id(name)
@@ -472,16 +534,38 @@ class PackManager:
         try:
             archive = ForgeArchive(self.forge_path, self._oodle())
 
+            selected_sail = None
+            if category == CATEGORY_SAIL and sail_target_id:
+                selected_sail = get_sail_target(sail_target_id)
+                if selected_sail is None:
+                    raise PackError(f"Unknown vanilla sail target: {sail_target_id}")
+                if len(files) != 1:
+                    raise PackError(
+                        "This sail archive contains multiple texture images. "
+                        "Install one sail design at a time so its vanilla target is unambiguous."
+                    )
+
             slots: list[PackSlot] = []
             imported = []
             errors: list[str] = []
             replaces: set[str] = set()
             for path in files:
                 mat, slot, kind = parse_filename(path.name)
+                if selected_sail is not None:
+                    mat, slot, kind = (selected_sail.material_id,
+                                       selected_sail.slot, "selected-sail-target")
                 if mat is None and category == CATEGORY_CREW:
                     crew_target = target_for_filename(path.name)
                     if crew_target is not None:
                         mat, slot, kind = crew_target.material_id, 0, "crew-catalog"
+                if mat is None and category == CATEGORY_GENERAL:
+                    general_target = target_for_general_filename(path.name)
+                    if general_target is not None:
+                        mat, slot, kind = general_target.material_id, general_target.slot, "general-catalog"
+                if mat is None and category == CATEGORY_SAIL:
+                    sail_target = target_for_sail_filename(path.name)
+                    if sail_target is not None:
+                        mat, slot, kind = sail_target.material_id, sail_target.slot, "sail-catalog"
                 if mat is None:
                     errors.append(f"{path.name}: {kind}")
                     continue
@@ -500,8 +584,23 @@ class PackManager:
                     crew_target = target_for_texture(slot_info.tex)
                     if crew_target is not None:
                         replaces.add(crew_target.display_name)
+                elif category == CATEGORY_GENERAL:
+                    general_target = target_for_general_filename(path.name)
+                    if general_target is not None:
+                        replaces.add(general_target.display_name)
+                elif category == CATEGORY_SAIL:
+                    sail_target = selected_sail or target_for_sail_filename(path.name)
+                    if sail_target is not None:
+                        replaces.add(sail_target.display_name)
 
             if not slots:
+                if category == CATEGORY_GENERAL:
+                    raise PackError(
+                        "Texture files were found, but their vanilla game targets could not be identified. "
+                        "General texture mods need material/slot IDs in their filenames or an Animus target manifest. "
+                        "Design-only Workshop PNGs cannot be patched safely until a vanilla target is selected.\n" +
+                        "\n".join(errors)
+                    )
                 raise PackError("No textures could be imported.\n" + "\n".join(errors))
 
             meta = {
@@ -524,6 +623,9 @@ class PackManager:
                     meta[field] = value if field == "replaces" else str(value)
             if replaces:
                 meta["replaces"] = sorted(replaces)
+            if selected_sail is not None:
+                meta["sail_target_id"] = selected_sail.id
+                meta["sail_texture_id"] = f"0x{selected_sail.texture_id:X}"
             (p_dir / "meta.json").write_text(
                 json.dumps(meta, indent=2) + "\n", encoding="utf-8")
 
@@ -569,13 +671,13 @@ class PackManager:
             shared = sorted(wanted & {(slot.mat, slot.slot) for slot in other.slots})
             other_replacements = self._replacement_keys(other)
             shared_replacements = sorted(wanted_replacements & other_replacements)
-            # Outfit metadata identifies the wardrobe entry more accurately
-            # than a single shared generic material (skin, eyes, etc.). Fall
-            # back to raw texture overlap only when either pack has no usable
-            # replacement metadata.
-            same_outfit = bool(shared_replacements)
+            # Named outfit/sail metadata identifies the replaced vanilla entry
+            # more accurately than a shared generic material. Fall back to raw
+            # texture overlap when either pack lacks usable replacement data.
+            uses_named_replacement = pack.category in {CATEGORY_OUTFIT, CATEGORY_SAIL}
+            same_replacement = bool(shared_replacements)
             texture_fallback = bool(shared) and not (wanted_replacements and other_replacements)
-            if same_outfit or texture_fallback or (pack.category != CATEGORY_OUTFIT and shared):
+            if same_replacement or texture_fallback or (not uses_named_replacement and shared):
                 conflicts.append({
                     "id": other.id,
                     "name": other.name,
@@ -868,12 +970,23 @@ class PackManager:
         return self._apply_plans(packs, categories, by_id)
 
     def revert_all(self) -> dict:
-        """Revert the currently-injected set back to vanilla."""
+        """Revert the currently-injected set back to vanilla.
+
+        A Ubisoft title update can replace/repack ``DataPC_boot.forge`` while
+        Animus has an active texture journal. External mip locations may remain
+        valid, while material TOC rows point at brand-new update data. A TOC
+        row which points at neither our patched entry nor its former entry is
+        therefore detached: our appended material is no longer active and must
+        not be relinked or used to truncate the newly updated archive.
+        """
         journal = self._load_journal()
         if journal is None:
             return {"reverted": 0, "issues": [], "packs": []}
         archive = ForgeArchive(self.forge_path, self._oodle())
         issues: list[str] = []
+        active_external: list[JournalEntry] = []
+        active_embedded: list[JournalEmbedded] = []
+        detached_embedded: list[JournalEmbedded] = []
 
         # Validate everything before writing a single byte.
         if str(self.forge_path.resolve()) != journal.forge:
@@ -892,28 +1005,42 @@ class PackManager:
                 issues.append(f"{e.rid:016X}: target past end of archive")
                 continue
             now = archive.read_at(e.offset, e.length)
-            if _sha16(now) != e.sha_new:
+            now_sha = _sha16(now)
+            if now_sha == e.sha_new:
+                active_external.append(e)
+            elif now_sha == e.sha_orig:
+                # Steam/Ubisoft already restored this block during an update.
+                continue
+            else:
                 issues.append(f"{e.rid:016X}: bytes changed by another tool")
         for k in journal.embedded:
             now_off, now_len = archive.read_toc_row(k.mat)
-            if (now_off, now_len) != (k.new_off, k.new_len):
-                issues.append(f"0x{k.mat:X}: TOC no longer matches what we wrote")
+            if (now_off, now_len) == (k.new_off, k.new_len):
+                active_embedded.append(k)
+            elif (now_off, now_len) == (k.orig_off, k.orig_len):
+                # Already returned to the exact pre-install material.
+                continue
+            else:
+                # A game update repacked/repointed this material. Our appended
+                # resource is detached, so touching the new TOC row would roll
+                # the game backward or corrupt the updated archive.
+                detached_embedded.append(k)
 
         if issues:
             raise PackError("Cannot revert safely:\n" + "\n".join(issues))
 
         # Write reversals.
         restored = 0
-        for k in journal.embedded:
+        for k in active_embedded:
             archive.repoint_toc(k.mat, k.orig_off, k.orig_len)
             restored += 1
-        for e in journal.external:
+        for e in active_external:
             archive.write_at(e.offset, Path(e.backup).read_bytes())
             restored += 1
 
         # Reclaim appended tail if it fully covers the end.
         appended = journal.appended
-        if appended:
+        if appended and not detached_embedded:
             start = min(o for o, _ in appended)
             end = max(o + l for o, l in appended)
             if end == current_size and sum(l for _, l in appended) == current_size - start:
@@ -926,7 +1053,12 @@ class PackManager:
         lib = self._load_library()
         lib["active"] = None
         self._save_library(lib)
-        return {"reverted": restored, "issues": issues, "packs": journal.packs}
+        return {
+            "reverted": restored,
+            "issues": issues,
+            "packs": journal.packs,
+            "detached_after_game_update": len(detached_embedded),
+        }
 
     def status(self) -> dict:
         """Read-only status: active pack + journal presence."""
@@ -937,6 +1069,8 @@ class PackManager:
             "staged_outfit": self._staged(CATEGORY_OUTFIT),
             "staged_weapon": self._staged(CATEGORY_WEAPON),
             "staged_crew": self._staged(CATEGORY_CREW),
+            "staged_sail": self._staged(CATEGORY_SAIL),
+            "staged_general": self._staged(CATEGORY_GENERAL),
         }
 
     def revert_pack(self, pack_id: str) -> dict:

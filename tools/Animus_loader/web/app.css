@@ -108,7 +108,8 @@ input:focus { border-color: var(--gold); box-shadow: 0 0 0 1px rgba(195,155,88,.
 .workspace { min-height: 0; display: grid; grid-template-rows: 42px 51px 1fr; }
 .workspace-head { display: flex; justify-content: space-between; border-bottom: 1px solid var(--gold-line); }
 .tabs { display: flex; align-items: stretch; }
-.tab { min-width: 100px; padding: 0 16px; border: 0; border-right: 1px solid var(--gold-line); background: rgba(9,10,10,.72); color: var(--text); font-size: 12px; letter-spacing: .6px; cursor: pointer; }
+.tab { min-width: 100px; padding: 0 16px; border: 0; border-right: 1px solid var(--gold-line); background: rgba(9,10,10,.72); color: var(--text); font-size: 12px; letter-spacing: .6px; cursor: pointer; transition: color .16s ease, background .16s ease, box-shadow .16s ease, text-shadow .16s ease; }
+.tab:hover:not(.active) { color: var(--gold-bright); background: linear-gradient(130deg, rgba(83,61,25,.42), rgba(17,18,16,.78)); box-shadow: inset 0 1px rgba(220,180,101,.48), inset 0 -1px rgba(173,124,43,.32); text-shadow: 0 0 8px rgba(220,175,91,.26); }
 .tab.active { color: white; background: linear-gradient(130deg, rgba(117,84,32,.58), rgba(25,24,19,.65)); box-shadow: inset 0 2px var(--gold), inset 0 -1px rgba(198,158,82,.6); }
 .nexus-tools { display: flex; align-items: center; gap: 8px; padding-right: 9px; font-size: 11px; }
 .button.compact { min-width: 125px; height: 31px; }

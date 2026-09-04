@@ -126,11 +126,11 @@ internal sealed class StartupSplashForm : Form
 
             await Task.Delay(180);
             SetProgress(64, "Portable runtime ready…");
-            var (mods, outfits, weapons) = ReadLibraryCounts();
+            var (mods, outfits, texturePacks) = ReadLibraryCounts();
             await Task.Delay(120);
             SetProgress(88, $"{mods} mod package{(mods == 1 ? "" : "s")} loaded");
             await Task.Delay(130);
-            SetProgress(94, $"{outfits} outfit{(outfits == 1 ? "" : "s")} and {weapons} weapon pack{(weapons == 1 ? "" : "s")} loaded");
+            SetProgress(94, $"{outfits} outfit{(outfits == 1 ? "" : "s")} and {texturePacks} other texture pack{(texturePacks == 1 ? "" : "s")} loaded");
             await Task.Delay(180);
             SetProgress(100, "Animus Mod & Outfit Manager ready");
             await Task.Delay(160);
@@ -146,31 +146,31 @@ internal sealed class StartupSplashForm : Form
         }
     }
 
-    private (int Mods, int Outfits, int Weapons) ReadLibraryCounts()
+    private (int Mods, int Outfits, int TexturePacks) ReadLibraryCounts()
     {
         var packages = Path.Combine(root, "mods", "packages");
         var modCount = Directory.Exists(packages)
             ? Directory.EnumerateFiles(packages, "*.jmod", SearchOption.TopDirectoryOnly).Count()
             : 0;
         var outfitCount = 0;
-        var weaponCount = 0;
+        var texturePackCount = 0;
         var library = Path.Combine(root, "mods", "textures", "library.json");
-        if (!File.Exists(library)) return (modCount, outfitCount, weaponCount);
+        if (!File.Exists(library)) return (modCount, outfitCount, texturePackCount);
         try
         {
             using var document = JsonDocument.Parse(File.ReadAllText(library));
             if (!document.RootElement.TryGetProperty("packs", out var packs) || packs.ValueKind != JsonValueKind.Array)
-                return (modCount, outfitCount, weaponCount);
+                return (modCount, outfitCount, texturePackCount);
             foreach (var pack in packs.EnumerateArray())
             {
                 var category = pack.TryGetProperty("category", out var value) ? value.GetString() : "outfit";
-                if (string.Equals(category, "weapon", StringComparison.OrdinalIgnoreCase)) weaponCount++;
-                else if (!string.Equals(category, "crew", StringComparison.OrdinalIgnoreCase)) outfitCount++;
+                if (string.Equals(category, "outfit", StringComparison.OrdinalIgnoreCase)) outfitCount++;
+                else texturePackCount++;
             }
         }
         catch (JsonException) { }
         catch (IOException) { }
-        return (modCount, outfitCount, weaponCount);
+        return (modCount, outfitCount, texturePackCount);
     }
 
     protected override void OnPaint(PaintEventArgs eventArgs)

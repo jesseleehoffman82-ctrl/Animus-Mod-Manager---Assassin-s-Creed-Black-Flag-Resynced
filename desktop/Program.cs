@@ -124,7 +124,8 @@ internal sealed class ConflictPromptForm : Form
         };
         var title = new Label
         {
-            Text = itemLabel == "outfit" ? "SHARED OUTFIT SLOT" : "SHARED TEXTURE SLOT",
+            Text = itemLabel == "outfit" ? "SHARED OUTFIT SLOT"
+                : itemLabel == "sail design" ? "SHARED SAIL SLOT" : "SHARED TEXTURE SLOT",
             ForeColor = GoldBright,
             BackColor = Color.Transparent,
             Font = new Font("Segoe UI Semibold", 10.5f),
@@ -181,7 +182,9 @@ internal sealed class ConflictPromptForm : Form
 
         var questionTop = listPanel.Bottom + 18;
         var pluralLabel = itemLabel == "outfit" ? "outfits"
-            : itemLabel == "weapon skin" ? "weapon skins" : "crew textures";
+            : itemLabel == "weapon skin" ? "weapon skins"
+            : itemLabel == "sail design" ? "sail designs"
+            : itemLabel == "texture mod" ? "texture mods" : "crew textures";
         var question = new Label
         {
             Text = $"Disable all listed {pluralLabel} and {action} “{packName}” instead?",
@@ -234,6 +237,143 @@ internal sealed class ConflictPromptForm : Form
         eventArgs.Graphics.DrawRectangle(border, 0, 0, ClientSize.Width - 1, ClientSize.Height - 1);
         using var accent = new Pen(GoldBright, 2);
         eventArgs.Graphics.DrawLine(accent, 0, 0, 115, 0);
+    }
+}
+
+internal sealed class SailTargetPromptForm : Form
+{
+    private sealed record TargetChoice(string Id, string Name, string Kind)
+    {
+        public override string ToString() => Kind == "emblem"
+            ? $"ADVANCED — {Name}" : Name;
+    }
+
+    private static readonly Color Surface = Color.FromArgb(9, 11, 11);
+    private static readonly Color Raised = Color.FromArgb(16, 18, 18);
+    private static readonly Color Gold = Color.FromArgb(183, 139, 70);
+    private static readonly Color GoldBright = Color.FromArgb(224, 188, 116);
+    private static readonly Color TextPrimary = Color.FromArgb(232, 229, 222);
+    private readonly ComboBox targets = new();
+
+    public string? SelectedTargetId => (targets.SelectedItem as TargetChoice)?.Id;
+
+    public SailTargetPromptForm(JsonArray options, string defaultId)
+    {
+        FormBorderStyle = FormBorderStyle.None;
+        HandleCreated += (_, _) => NativeMethods.UseSmallRoundedCorners(Handle);
+        StartPosition = FormStartPosition.CenterParent;
+        ShowInTaskbar = false;
+        BackColor = Surface;
+        ForeColor = TextPrimary;
+        ClientSize = new Size(570, 270);
+        MinimumSize = ClientSize;
+        MaximumSize = ClientSize;
+        AutoScaleMode = AutoScaleMode.Dpi;
+
+        var header = new Panel
+        {
+            BackColor = Raised,
+            Bounds = new Rectangle(1, 1, ClientSize.Width - 2, 49),
+        };
+        header.MouseDown += (_, e) =>
+        {
+            if (e.Button != MouseButtons.Left) return;
+            NativeMethods.ReleaseCapture();
+            NativeMethods.SendMessage(Handle, 0xA1, (IntPtr)0x2, IntPtr.Zero);
+        };
+        header.Controls.Add(new Label
+        {
+            Text = "CHOOSE VANILLA SAIL SET",
+            ForeColor = GoldBright,
+            BackColor = Color.Transparent,
+            Font = new Font("Segoe UI Semibold", 10.5f),
+            Bounds = new Rectangle(23, 15, 400, 24),
+        });
+
+        var close = MakeButton("×", 34);
+        close.Font = new Font("Segoe UI", 13f);
+        close.Bounds = new Rectangle(ClientSize.Width - 47, 7, 34, 34);
+        close.DialogResult = DialogResult.Cancel;
+        header.Controls.Add(close);
+
+        Controls.Add(new Label
+        {
+            Text = "Select the in-game sail cosmetic this design will replace.",
+            ForeColor = TextPrimary,
+            BackColor = Color.Transparent,
+            Font = new Font("Segoe UI", 10f),
+            Bounds = new Rectangle(24, 72, ClientSize.Width - 48, 25),
+        });
+        Controls.Add(new Label
+        {
+            Text = "Different targets can remain enabled together. The manager warns when two designs share one target.",
+            ForeColor = Color.FromArgb(168, 166, 160),
+            BackColor = Color.Transparent,
+            Font = new Font("Segoe UI", 9f),
+            Bounds = new Rectangle(24, 99, ClientSize.Width - 48, 40),
+        });
+
+        targets.Bounds = new Rectangle(24, 145, ClientSize.Width - 48, 34);
+        targets.DropDownStyle = ComboBoxStyle.DropDownList;
+        targets.FlatStyle = FlatStyle.Flat;
+        targets.BackColor = Raised;
+        targets.ForeColor = TextPrimary;
+        targets.Font = new Font("Segoe UI", 9.5f);
+        targets.DrawMode = DrawMode.OwnerDrawFixed;
+        targets.ItemHeight = 25;
+        targets.DrawItem += (_, e) =>
+        {
+            if (e.Index < 0) return;
+            e.DrawBackground();
+            using var brush = new SolidBrush((e.State & DrawItemState.Selected) != 0
+                ? GoldBright : TextPrimary);
+            e.Graphics.DrawString(targets.Items[e.Index]?.ToString(), targets.Font,
+                brush, e.Bounds.Left + 6, e.Bounds.Top + 4);
+        };
+        foreach (var node in options)
+        {
+            if (node is not JsonObject item) continue;
+            var id = item["id"]?.GetValue<string>() ?? "";
+            var name = item["name"]?.GetValue<string>() ?? id;
+            var kind = item["kind"]?.GetValue<string>() ?? "sail-set";
+            var choice = new TargetChoice(id, name, kind);
+            targets.Items.Add(choice);
+            if (id == defaultId) targets.SelectedItem = choice;
+        }
+        if (targets.SelectedIndex < 0 && targets.Items.Count > 0) targets.SelectedIndex = 0;
+
+        var cancel = MakeButton("CANCEL", 105);
+        cancel.Bounds = new Rectangle(ClientSize.Width - 292, ClientSize.Height - 61, 105, 36);
+        cancel.DialogResult = DialogResult.Cancel;
+        var confirm = MakeButton("USE THIS SAIL SET", 153, true);
+        confirm.Bounds = new Rectangle(ClientSize.Width - 177, ClientSize.Height - 61, 153, 36);
+        confirm.DialogResult = DialogResult.OK;
+        AcceptButton = confirm;
+        CancelButton = cancel;
+        Controls.AddRange([header, targets, cancel, confirm]);
+    }
+
+    private static Button MakeButton(string text, int width, bool accented = false)
+    {
+        var button = new Button
+        {
+            Text = text,
+            Size = new Size(width, 36),
+            FlatStyle = FlatStyle.Flat,
+            BackColor = accented ? Color.FromArgb(33, 28, 18) : Raised,
+            ForeColor = accented ? GoldBright : TextPrimary,
+            Font = new Font("Segoe UI Semibold", 8.5f),
+            Cursor = Cursors.Hand,
+        };
+        button.FlatAppearance.BorderColor = accented ? Gold : Color.FromArgb(75, 70, 58);
+        return button;
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        base.OnPaint(e);
+        using var border = new Pen(Color.FromArgb(180, Gold));
+        e.Graphics.DrawRectangle(border, 0, 0, ClientSize.Width - 1, ClientSize.Height - 1);
     }
 }
 
@@ -392,7 +532,7 @@ internal sealed class MainForm : Form
                 var category = rpcArgs.Count > 0 ? rpcArgs[0]?.GetValue<string>() ?? "outfit" : "outfit";
                 using var dialog = new OpenFileDialog
                 {
-                    Title = "Select an outfit, weapon, or crew texture pack",
+                    Title = "Select an outfit, weapon, crew, or sail texture pack",
                     Filter = "All files (*.*)|*.*",
                     Multiselect = false,
                 };
@@ -401,6 +541,25 @@ internal sealed class MainForm : Form
                     await PostResponse(id, new JsonObject { ["result"] = null });
                     return;
                 }
+                if (category == "sail")
+                {
+                    var choicesPayload = await RunPython("get_sail_targets", []);
+                    if (choicesPayload["error"] is not null)
+                        throw new InvalidOperationException(
+                            choicesPayload["error"]?.GetValue<string>() ?? "Could not load sail targets");
+                    var choicesResult = choicesPayload["result"] as JsonObject
+                        ?? throw new InvalidOperationException("The sail target catalogue is unavailable.");
+                    var choices = choicesResult["targets"] as JsonArray ?? [];
+                    var defaultId = choicesResult["default_id"]?.GetValue<string>() ?? "common";
+                    using var targetPrompt = new SailTargetPromptForm(choices, defaultId);
+                    if (targetPrompt.ShowDialog(this) != DialogResult.OK ||
+                        string.IsNullOrWhiteSpace(targetPrompt.SelectedTargetId))
+                    {
+                        await PostResponse(id, new JsonObject { ["result"] = null });
+                        return;
+                    }
+                    rpcArgs = [category, dialog.FileName, targetPrompt.SelectedTargetId];
+                }
                 await PostJson(new JsonObject
                 {
                     ["event"] = "install_progress",
@@ -408,7 +567,7 @@ internal sealed class MainForm : Form
                     ["stage"] = "installing"
                 }.ToJsonString());
                 rpcMethod = "install_pack_path";
-                rpcArgs = [category, dialog.FileName];
+                if (category != "sail") rpcArgs = [category, dialog.FileName];
             }
             else if (method == "update_item")
             {
@@ -438,7 +597,7 @@ internal sealed class MainForm : Form
             }
 
             var payload = await RunPython(rpcMethod, rpcArgs);
-            if ((method == "install_pack" || method == "toggle_pack") && payload["error"] is null &&
+            if ((method == "install_pack" || method == "install_mod" || method == "toggle_pack") && payload["error"] is null &&
                 payload["result"] is JsonObject installResult &&
                 installResult["requires_confirmation"]?.GetValue<bool>() == true)
             {
@@ -451,7 +610,10 @@ internal sealed class MainForm : Form
                     .Select(item => item?["name"]?.GetValue<string>())
                     .Where(name => !string.IsNullOrWhiteSpace(name))
                     .ToArray();
-                var itemLabel = category == "outfit" ? "outfit" : category == "weapon" ? "weapon skin" : "crew texture";
+                var itemLabel = category == "outfit" ? "outfit"
+                    : category == "weapon" ? "weapon skin"
+                    : category == "crew" ? "crew texture"
+                    : category == "sail" ? "sail design" : "texture mod";
                 using var prompt = new ConflictPromptForm(
                     packName,
                     itemLabel,

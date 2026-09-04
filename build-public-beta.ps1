@@ -1,6 +1,7 @@
 param(
     [string]$Version = "",
     [switch]$NoRestore,
+    [switch]$PortableOnly,
     [string]$SigningThumbprint = "",
     [string]$TimestampUrl = "http://timestamp.digicert.com"
 )
@@ -160,7 +161,9 @@ $Version | Set-Content -LiteralPath (Join-Path $stage "VERSION.txt") -Encoding a
 $hashLines = Get-ChildItem -LiteralPath $stage -File -Recurse |
     Sort-Object FullName |
     ForEach-Object {
-        $relative = [IO.Path]::GetRelativePath($stage, $_.FullName).Replace("\", "/")
+        # Windows PowerShell 5.1 runs on .NET Framework and does not provide
+        # Path.GetRelativePath. The staging prefix is already validated above.
+        $relative = ($_.FullName.Substring($resolvedStage.Length) -replace '^[\\/]+', '').Replace("\", "/")
         $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant()
         "$hash  $relative"
     }
@@ -173,3 +176,20 @@ $archiveHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash.ToLow
 
 Write-Host "Public beta created: $archive"
 Write-Host "SHA-256: $archiveHash"
+
+# A numbered update is an installed-product upgrade by default. Always create
+# the stable-AppId installer so existing-version detection and in-place data
+# preservation cannot be accidentally omitted from a release.
+if (-not $PortableOnly) {
+    $installerArguments = @("-Version", $Version)
+    if ($SigningThumbprint) {
+        $installerArguments += @(
+            "-SigningThumbprint", $SigningThumbprint,
+            "-TimestampUrl", $TimestampUrl
+        )
+    }
+    & (Join-Path $projectRoot "build-installer.ps1") @installerArguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "Installer build failed with exit code $LASTEXITCODE."
+    }
+}

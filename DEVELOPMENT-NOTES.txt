@@ -1,4 +1,4 @@
-ANIMUS MOD & OUTFIT MANAGER 0.1.5 BETA - DEVELOPMENT NOTES
+ANIMUS MOD & OUTFIT MANAGER 0.1.7 BETA - DEVELOPMENT NOTES
 ============================================================
 
 Animus Mod & Outfit Manager was created through a human-directed, AI-assisted software
@@ -21,7 +21,7 @@ APPLICATION ARCHITECTURE
   startup splash screen, window management, and WebView2 integration.
 - Microsoft Edge WebView2 renders the local HTML/CSS/JavaScript interface.
 - Python 3.14 implements archive analysis, managed mod deployment, backup and
-  restoration, outfit/weapon/crew texture handling, metadata, and local RPC.
+  restoration, outfit/weapon/crew/sail texture handling, metadata, and local RPC.
 - Official 7-Zip and DirectXTex utilities provide archive extraction and
   supported texture conversion operations.
 
@@ -33,7 +33,7 @@ SOURCE AND VERIFICATION
 -----------------------
 
 This source archive contains the authored C#, Python, HTML, CSS, and JavaScript
-files corresponding to version 0.1.5 Beta, along with regression tests and
+files corresponding to version 0.1.7 Beta, along with regression tests and
 BUILD-INSTRUCTIONS.txt. Official redistributable runtimes and third-party
 compiled utilities are intentionally excluded from the source-only archive.
 

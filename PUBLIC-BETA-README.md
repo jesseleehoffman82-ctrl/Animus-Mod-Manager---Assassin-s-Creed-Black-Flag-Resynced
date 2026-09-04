@@ -1,6 +1,6 @@
 # Animus Mod & Outfit Manager — Public Beta
 
-Version 0.1.5 Beta for Windows x64
+Version 0.1.7 Beta for Windows x64
 
 Animus Mod & Outfit Manager manages mods, outfit replacements, weapon textures, and
 crew textures for Assassin's Creed IV: Black Flag Resynced. This is an early

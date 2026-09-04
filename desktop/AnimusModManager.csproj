@@ -12,12 +12,12 @@
     <Product>Animus Mod &amp; Outfit Manager</Product>
     <Company>Animus Mod &amp; Outfit Manager Project</Company>
     <Authors>Animus Mod &amp; Outfit Manager Project</Authors>
-    <Description>Mod, outfit, weapon, and crew texture manager for Assassin's Creed IV: Black Flag Resynced.</Description>
+    <Description>Mod, outfit, weapon, crew, and sail texture manager for Assassin's Creed IV: Black Flag Resynced.</Description>
     <Copyright>Copyright © 2026 Animus Mod &amp; Outfit Manager Project</Copyright>
-    <Version>0.1.5-beta</Version>
-    <AssemblyVersion>0.1.5.0</AssemblyVersion>
-    <FileVersion>0.1.5.0</FileVersion>
-    <ProductVersion>0.1.5-beta</ProductVersion>
+    <Version>0.1.7-beta</Version>
+    <AssemblyVersion>0.1.7.0</AssemblyVersion>
+    <FileVersion>0.1.7.0</FileVersion>
+    <ProductVersion>0.1.7-beta</ProductVersion>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Microsoft.Web.WebView2.Core">

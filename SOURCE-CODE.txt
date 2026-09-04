@@ -1,4 +1,4 @@
-ANIMUS MOD & OUTFIT MANAGER 0.1.5 BETA - SOURCE CODE
+ANIMUS MOD & OUTFIT MANAGER 0.1.7 BETA - SOURCE CODE
 ============================================================
 
 The complete public source repository and build history are available here:
@@ -9,7 +9,7 @@ A matching source-only archive may also be uploaded beside the application on
 Nexus Mods for reviewer convenience:
 
 Source filename:
-Animus-Mod-Manager-0.1.5-Source.zip
+Animus-Mod-Manager-0.1.7-Source.zip
 
 The source archive contains the C# desktop host, Python backend, HTML/CSS/
 JavaScript interface, regression tests, third-party notices, and complete
