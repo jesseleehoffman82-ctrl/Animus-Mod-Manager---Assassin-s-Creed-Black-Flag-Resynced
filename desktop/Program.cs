@@ -349,7 +349,7 @@ internal sealed class ReplacementTargetPromptForm : Form
         if (targets.SelectedIndex < 0 && targets.Items.Count > 0) targets.SelectedIndex = 0;
 
         var cancel = MakeButton("CANCEL", 105);
-        cancel.Bounds = new Rectangle(ClientSize.Width - 292, ClientSize.Height - 61, 105, 36);
+        cancel.Bounds = new Rectangle(ClientSize.Width - 304, ClientSize.Height - 61, 105, 36);
         cancel.DialogResult = DialogResult.Cancel;
         var confirm = MakeButton(confirmText, 165, true);
         confirm.Bounds = new Rectangle(ClientSize.Width - 189, ClientSize.Height - 61, 165, 36);
