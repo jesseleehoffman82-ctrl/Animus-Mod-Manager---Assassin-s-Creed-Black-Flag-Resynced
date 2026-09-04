@@ -2,7 +2,6 @@ const fallbackState = {
   app_version: "",
   game_dir: "",
   game_found: false,
-  nexus_metadata_available: true,
   mods: [],
   outfits: [], weapons: [], crew: [], sails: [],
 };
@@ -20,8 +19,6 @@ const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 const hostPending = new Map();
 let hostRequestId = 0;
-
-function api() { return window.pywebview?.api; }
 
 if (window.chrome?.webview) {
   window.chrome.webview.addEventListener("message", event => {
@@ -61,9 +58,7 @@ function callNativeHost(method, args) {
 }
 
 async function call(method, ...args) {
-  const bridge = api();
   try {
-    if (bridge && typeof bridge[method] === "function") return await bridge[method](...args);
     if (window.chrome?.webview) return await callNativeHost(method, args);
     return null;
   }
@@ -93,7 +88,6 @@ function rowTooltip(row) {
   if (row.dll_compatibility) lines.push(`DLL: ${row.dll_compatibility.replaceAll("-", " ")}`);
   if (Array.isArray(row.replaces) && row.replaces.length) lines.push(`Replaces: ${row.replaces.join(", ")}`);
   if (row.description) lines.push(row.description);
-  if (row.nexus?.url) lines.push(`Nexus: ${row.nexus.url}`);
   return escapeHtml(lines.join("\n"));
 }
 
@@ -324,7 +318,6 @@ function showMenu(button, key) {
   $("#update-menu-action span").textContent = `Update ${itemLabel}`;
   $("#open-menu-action span").textContent = `Open ${itemLabel} Folder`;
   $("#uninstall-menu-action span").textContent = `Uninstall ${itemLabel}`;
-  $("#nexus-menu-action span").textContent = row?.nexus?.url ? "Visit on Nexus" : "Link Nexus Page";
   menu.hidden = false;
   const rect = button.getBoundingClientRect();
   const width = 225, height = menu.offsetHeight;
@@ -340,9 +333,6 @@ async function showDetails(name) {
   if (!data) return;
   const targets = Array.isArray(data.targets) ? data.targets : [];
   const replaces = Array.isArray(data.replaces) && data.replaces.length ? data.replaces.join(", ") : "—";
-  const nexus = data.nexus?.url
-    ? `<a class="nexus-link" href="${escapeHtml(data.nexus.url)}" target="_blank" rel="noopener">Visit on Nexus ↗</a>`
-    : "Not linked";
   const compatibility = data.dll_compatibility
     ? escapeHtml(data.dll_compatibility.replaceAll("-", " "))
     : "Not required";
@@ -350,7 +340,6 @@ async function showDetails(name) {
     <dt>Name</dt><dd>${escapeHtml(data.name)}</dd><dt>Version</dt><dd>${escapeHtml(data.version || "—")}</dd>
     <dt>Author</dt><dd>${escapeHtml(data.author || "—")}</dd><dt>Category</dt><dd>${escapeHtml(data.category || "—")}</dd>
     <dt>Replaces</dt><dd>${escapeHtml(replaces)}</dd><dt>Texture slots</dt><dd>${escapeHtml(data.slots ?? data.targets?.length ?? "—")}</dd>
-    <dt>Nexus</dt><dd>${nexus}</dd>
     <dt>DLL compatibility</dt><dd>${compatibility}</dd>
     <dt>Description</dt><dd>${escapeHtml(data.description || "—")}</dd>
     <dt>Package</dt><dd>${escapeHtml(data.path || "—")}</dd></dl>
@@ -454,7 +443,6 @@ $("#browse-button").onclick = async event => {
 };
 $("#detect-button").onclick = async () => { const state = await call("detect_game_dir"); if (state) window.animusSetState(state); };
 $("#refresh-button").onclick = refresh;
-$("#nexus-page-button").onclick = () => call("open_nexus_page");
 $("#launch-game-button").onclick = async event => {
   const button = event.currentTarget;
   const label = $("#launch-game-label");
@@ -550,25 +538,6 @@ $("#context-menu").onclick = async event => {
       if (row) await call("open_pack_folder", row.id);
     }
   }
-  if (action === "nexus") {
-    const row = currentRows().find(item => (item.name || item.id) === name);
-    if (row?.nexus?.url) {
-      window.open(row.nexus.url, "_blank", "noopener");
-    } else {
-      const value = window.prompt("Paste the Nexus mod page URL:", "https://www.nexusmods.com/assassinscreedblackflagresynced/mods/");
-      if (value) {
-        try {
-          const url = new URL(value.trim());
-          const match = url.pathname.match(/^\/assassinscreedblackflagresynced\/mods\/(\d+)/i);
-          if (!url.hostname.endsWith("nexusmods.com") || !match) throw new Error("not a Black Flag Resynced mod URL");
-          const state = await call("set_nexus_link", itemTypeForRow(row), row?.id || name, Number(match[1]));
-          if (state) window.animusSetState(state);
-        } catch (error) {
-          addLog({ tag: "err", message: `Invalid Nexus page: ${error.message}` });
-        }
-      }
-    }
-  }
   if (action === "details") await showDetails(name);
 };
 
@@ -614,16 +583,10 @@ $(".titlebar").addEventListener("pointerdown", event => {
   if (event.button === 0 && !event.target.closest("button") && window.chrome?.webview) call("win_drag");
 });
 
-window.addEventListener("pywebviewready", async () => {
-  app.bridgeReady = true;
-  await refresh();
-  addLog({ tag: "info", message: "Animus Mod & Outfit Manager started" });
-});
-
 render();
 if (window.chrome?.webview) {
   app.bridgeReady = true;
   refresh().then(() => addLog({ tag: "info", message: "Animus Mod & Outfit Manager started" }));
-} else if (!window.pywebview) {
+} else {
   addLog({ tag: "info", message: "UI preview mode — backend bridge is not connected" });
 }

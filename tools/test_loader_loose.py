@@ -52,9 +52,9 @@ def write_proxy_package(mods_root: Path, filename: str, name: str, payload: byte
 
 
 def main() -> int:
-    nexus_name = "Walk By Default 428 3 2026-08-25T04-28Z AbCd123"
-    assert Loader._nexus_archive_mod_id(nexus_name) == 428
-    assert Loader._loose_archive_metadata(nexus_name, "")[1] == "3"
+    download_name = "Walk By Default 428 3 2026-08-25T04-28Z AbCd123"
+    assert Loader._archive_source_mod_id(download_name) == 428
+    assert Loader._loose_archive_metadata(download_name, "")[1] == "3"
     assert Loader._proxy_chain_alias("", 428) == "wininet.dll"
 
     if TEST_ROOT.exists():
@@ -151,7 +151,7 @@ def main() -> int:
     assert not (GAME_DIR / "versionHooked.dll").exists()
 
     # 5. Two custom proxies can coexist only when one explicitly declares a
-    #    supported secondary alias. This models Walk By Default (Nexus 428),
+    #    supported secondary alias. This models the Walk By Default package,
     #    whose documented chain loads the previous proxy as wininet.dll.
     chain_game = TEST_ROOT / "chain-game"
     chain_mods = TEST_ROOT / "chain-mods"

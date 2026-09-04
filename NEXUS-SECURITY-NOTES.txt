@@ -15,12 +15,11 @@ memory. When directed by the user, it deploys conventional loose-file mods or
 patches supported game archive data while retaining the information needed to
 disable or restore managed content.
 
-NEXUS ACCESS
-The application does not contain, request, transmit, or store a personal Nexus
-API key. It does not use Nexus SSO and does not download files from Nexus Mods.
-Linked-item metadata is read from the public Nexus GraphQL endpoint at
-https://api.nexusmods.com/v2/graphql without authentication. Users download mod
-archives manually in their browser and select those local archives in Animus.
+ONLINE ACCESS
+The application contains no mod-site integration, account authentication,
+metadata lookup, or direct-download feature. Users download archives manually
+with their normal browser and select those local files in Animus. Installation,
+management, recovery, and game launching operate locally.
 
 Version: 0.1.7-beta
 Publisher: Animus Mod & Outfit Manager Project

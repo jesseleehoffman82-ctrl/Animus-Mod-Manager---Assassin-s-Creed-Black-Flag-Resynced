@@ -111,12 +111,8 @@ input:focus { border-color: var(--gold); box-shadow: 0 0 0 1px rgba(195,155,88,.
 .tab { min-width: 100px; padding: 0 16px; border: 0; border-right: 1px solid var(--gold-line); background: rgba(9,10,10,.72); color: var(--text); font-size: 12px; letter-spacing: .6px; cursor: pointer; transition: color .16s ease, background .16s ease, box-shadow .16s ease, text-shadow .16s ease; }
 .tab:hover:not(.active) { color: var(--gold-bright); background: linear-gradient(130deg, rgba(83,61,25,.42), rgba(17,18,16,.78)); box-shadow: inset 0 1px rgba(220,180,101,.48), inset 0 -1px rgba(173,124,43,.32); text-shadow: 0 0 8px rgba(220,175,91,.26); }
 .tab.active { color: white; background: linear-gradient(130deg, rgba(117,84,32,.58), rgba(25,24,19,.65)); box-shadow: inset 0 2px var(--gold), inset 0 -1px rgba(198,158,82,.6); }
-.nexus-tools { display: flex; align-items: center; gap: 8px; padding-right: 9px; font-size: 11px; }
+.top-actions { display: flex; align-items: center; gap: 8px; padding-right: 9px; font-size: 11px; }
 .button.compact { min-width: 125px; height: 31px; }
-.button.nexus-connect { min-width: 155px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
-.nexus-connect i { width: 6px; height: 6px; flex: 0 0 6px; border-radius: 50%; background: #777; box-shadow: 0 0 5px currentColor; }
-.nexus-connect.connected { color: var(--green); }
-.nexus-connect.connected i { background: var(--green); }
 .button.launch-game { min-width: 155px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; color: var(--gold-bright); }
 .launch-icon { font-size: 16px; }
 .toolbar { display: flex; align-items: center; gap: 9px; min-width: 0; padding: 8px 12px; overflow: hidden; }
@@ -184,8 +180,6 @@ dialog::backdrop { background: rgba(0,0,0,.68); }
 .details-grid { display: grid; grid-template-columns: 130px 1fr; gap: 11px; font-size: 13px; }
 .details-grid dt { color: var(--gold-bright); }
 .details-grid dd { margin: 0; word-break: break-word; }
-.nexus-link { color: var(--gold-bright); text-decoration: none; }
-.nexus-link:hover { color: white; text-decoration: underline; }
 .target-list { margin: 16px 0 0; padding: 0; list-style: none; font: 11px/1.8 Consolas, monospace; color: #b9b9b9; }
 
 .rename-dialog { width: min(480px, calc(100vw - 40px)); margin: auto; }
@@ -206,7 +200,7 @@ dialog::backdrop { background: rgba(0,0,0,.68); }
   .brand-divider { margin-left: 5px; }
   main { grid-template-rows: 45px minmax(205px, 1fr) 112px; }
   .game-row { grid-template-columns: minmax(225px, 1fr) 82px 82px 105px; gap: 5px; }
-  .nexus-tools label { display: none; }
+  .top-actions label { display: none; }
   .toolbar .button { min-width: 140px; }
   .col-author { width: 180px; }
 }
@@ -215,6 +209,5 @@ dialog::backdrop { background: rgba(0,0,0,.68); }
   .game-panel { width: calc(100% - 220px); }
   .game-title { display: none; }
   .brand-divider { margin-left: 5px; }
-  .nexus-tools { gap: 8px; padding-right: 10px; }
-  .button.nexus-connect { min-width: 165px; font-size: 10px; }
+  .top-actions { gap: 8px; padding-right: 10px; }
 }

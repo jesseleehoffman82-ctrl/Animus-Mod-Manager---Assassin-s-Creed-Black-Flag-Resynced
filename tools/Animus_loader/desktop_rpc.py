@@ -16,7 +16,6 @@ from pathlib import Path
 
 from .core import DEFAULT_GAME_DIR, Loader, LoaderError
 from .game_launch import game_executable, launch_game as launch_selected_game, steam_build_id
-from .nexus import NexusClient, mod_page_url
 from .packs import CATEGORY_CREW, CATEGORY_GENERAL, CATEGORY_OUTFIT, CATEGORY_SAIL, CATEGORY_WEAPON, PackError, PackManager
 from .crew_catalog import crew_targets
 from .sail_catalog import sail_targets
@@ -89,18 +88,6 @@ class DesktopRpc:
                 continue
         return None
 
-    @staticmethod
-    def _nexus_info(metadata: dict) -> dict | None:
-        nexus = metadata.get("nexus") if isinstance(metadata, dict) else None
-        if not isinstance(nexus, dict) or not nexus.get("mod_id"):
-            return None
-        mod_id = int(nexus["mod_id"])
-        return {
-            "game_id": int(nexus.get("game_id", 9408)),
-            "mod_id": mod_id,
-            "url": mod_page_url(mod_id),
-        }
-
     def list_mods(self) -> list[dict]:
         installed = {record.name: record for record in self.loader.list_installed()}
         result = []
@@ -126,7 +113,6 @@ class DesktopRpc:
                 "version": package.version,
                 "author": package.author,
                 "description": package.manifest.get("description", ""),
-                "nexus": self._nexus_info(package.manifest),
                 "targets": len(package.targets),
                 "enabled": bool(record and record.enabled),
                 "dll_compatibility": compatibility[-1] if compatibility else None,
@@ -143,7 +129,6 @@ class DesktopRpc:
                 "version": meta.get("version", ""),
                 "author": meta.get("author", ""),
                 "description": meta.get("description", "Managed general texture replacement."),
-                "nexus": self._nexus_info(meta),
                 "targets": len(pack.slots),
                 "enabled": pack.id in staged,
                 "managed_type": "texture-pack",
@@ -177,7 +162,6 @@ class DesktopRpc:
                     }
                     for item in self.manager.sharing_packs(pack)
                 ],
-                "nexus": self._nexus_info(meta),
             })
         return result
 
@@ -195,7 +179,6 @@ class DesktopRpc:
             "crew": self.list_packs(CATEGORY_CREW),
             "sails": self.list_packs(CATEGORY_SAIL),
             "proxy_status": self.loader.proxy_status(),
-            "nexus_metadata_available": True,
         }
 
     def dispatch(self, method: str, args: list) -> tuple[object, dict | None]:
@@ -273,7 +256,6 @@ class DesktopRpc:
                 "ok": True, "name": package.name, "version": package.version,
                 "author": package.author, "category": package.category,
                 "description": package.manifest.get("description", ""),
-                "nexus": self._nexus_info(package.manifest),
                 "path": str(path),
                 "dll_compatibility": compatibility[-1] if compatibility else None,
                 "targets": [{
@@ -302,7 +284,6 @@ class DesktopRpc:
                 "description": meta.get("description", ""),
                 "replaces": replaces,
                 "slots": len(pack.slots),
-                "nexus": self._nexus_info(meta),
                 "path": str(pack.dir),
                 "targets": [{
                     "forge": "DataPC_boot.forge",
@@ -347,7 +328,7 @@ class DesktopRpc:
             self._log_dll_compatibility(backups)
             if converted:
                 self.log(
-                    f"Imported ordinary Nexus archive as a managed loose-file mod ({len(package.targets)} file(s)).",
+                    f"Imported ordinary archive as a managed loose-file mod ({len(package.targets)} file(s)).",
                     "info",
                 )
             self.log(
@@ -411,17 +392,6 @@ class DesktopRpc:
                 else:
                     os.startfile(str(target))  # type: ignore[attr-defined]
             return {"ok": True}, None
-
-        if method == "set_nexus_link":
-            item_type, item_id, mod_id = str(args[0]), str(args[1]), int(args[2])
-            if item_type == "mod":
-                self.loader.set_nexus(item_id, mod_id)
-            elif item_type in {CATEGORY_OUTFIT, CATEGORY_WEAPON, CATEGORY_CREW, CATEGORY_SAIL, CATEGORY_GENERAL}:
-                self.manager.set_nexus(item_id, mod_id)
-            else:
-                raise ValueError(f"Unsupported Nexus item type: {item_type}")
-            self.log(f"Linked '{item_id}' to Nexus mod {mod_id}.", "ok")
-            return self.state(), None
 
         if method == "rename_item":
             item_type, item_id, new_name = map(str, args[:3])
@@ -541,7 +511,7 @@ class DesktopRpc:
             )
             new_meta_path = new_pack.dir / "meta.json"
             new_meta = self.manager._pack_meta(new_pack)
-            for field in ("nexus", "author"):
+            for field in ("author",):
                 if old_meta.get(field) and not new_meta.get(field):
                     new_meta[field] = old_meta[field]
             new_meta_path.write_text(json.dumps(new_meta, indent=2) + "\n", encoding="utf-8")
@@ -630,16 +600,6 @@ class DesktopRpc:
                     self.manager.set_order(category, ordered)
             state = self.state()
             return state, None
-
-        if method == "check_updates":
-            client = NexusClient()
-            mod_results = self.loader.check_updates(client=client)
-            pack_results = self.manager.check_updates(client=client)
-            for item in [*mod_results, *pack_results]:
-                if item.get("has_update"):
-                    self.log(f"Update available for {item['name']}: {item.get('current') or '?'} → {item['latest']}", "warn")
-            self.log("Update check finished.", "ok")
-            return {"ok": True}, None
 
         raise ValueError(f"Unknown desktop method: {method}")
 

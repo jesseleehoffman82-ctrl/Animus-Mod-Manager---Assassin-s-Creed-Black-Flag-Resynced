@@ -1,7 +1,7 @@
 """Safe legacy mappings for non-category ship texture packs.
 
 Modern Animus texture packs should encode a material id and slot in each
-filename or provide an Animus manifest. A few established Nexus packs predate
+filename or provide an Animus manifest. A few established packs predate
 the manager and contain only Workshop-facing design names. Exact mappings live
 here so those packs can be managed without making fuzzy target guesses.
 """
@@ -19,7 +19,7 @@ class GeneralTextureTarget:
     display_name: str
 
 
-# Black Cannons (Nexus mod 298) recommends the final Gold Jackdaw upgrades.
+# Black Cannons recommends the final Gold Jackdaw upgrades.
 # The source archive provides one PNG per weapon type but no resource ids.
 _EXACT_TARGETS = {
     "dark light mortar": GeneralTextureTarget(0x22EDF546B3F, 0, "Gold Light Mortar"),

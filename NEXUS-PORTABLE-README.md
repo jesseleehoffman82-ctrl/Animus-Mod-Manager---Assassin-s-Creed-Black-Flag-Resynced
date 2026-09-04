@@ -1,4 +1,4 @@
-# Animus Mod & Outfit Manager 0.1.5 Beta
+# Animus Mod & Outfit Manager 0.1.7 Beta
 
 Portable mod manager for Assassin's Creed IV: Black Flag Resynced.
 
@@ -20,14 +20,13 @@ Microsoft .NET 10 Desktop Runtime (x64) is required. Download it from the
 official Microsoft .NET 10 page if Windows reports that the required framework
 is missing: https://dotnet.microsoft.com/en-us/download/dotnet/10.0
 
-Supported package categories include mods, outfits, weapons, and crew
+Supported package categories include mods, outfits, weapons, crew, and sails
 customization. ZIP, 7Z, and RAR mod archives can be selected from inside the
 manager.
 
 This is a public beta. Please include the activity-log message and the name of
 the selected mod archive when reporting a problem.
 
-Nexus integration is metadata-only. Animus uses the public Nexus GraphQL
-endpoint without authentication and never asks for or stores an API key.
-Downloads remain manual: download an archive in your browser, then install or
-update it from inside the manager.
+Animus contains no mod-site integration, account login, metadata lookup, or
+direct-download feature. Download archives in your normal browser, then install
+or update the local files from inside the manager.

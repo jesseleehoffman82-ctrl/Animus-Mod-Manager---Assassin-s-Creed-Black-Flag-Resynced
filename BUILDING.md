@@ -32,15 +32,11 @@ Install the development dependencies:
 
 Run the regression tests from the source-package root:
 
-`py -3.14 tools/test_import_nexus_zip.py`
-
 `py -3.14 tools/test_loader_loose.py`
 
 `py -3.14 tools/test_loader_outfits.py`
 
 `py -3.14 tools/test_loader.py`
-
-`py -3.14 tools/test_nexus_updates.py`
 
 ## Distribution design
 

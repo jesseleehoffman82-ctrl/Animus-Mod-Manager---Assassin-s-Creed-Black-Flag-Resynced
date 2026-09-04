@@ -22,7 +22,7 @@ and do not want to depend on Outfit Workshop for installation.
 
 - Dedicated **Mods**, **Outfits**, **Weapons** and **Crew** libraries.
 - Persistent enable/disable state across manager restarts.
-- Installs supported ordinary Nexus ZIP mods even when `manifest.json` is not
+- Installs supported ordinary ZIP mods even when `manifest.json` is not
   supplied, provided the archive has a layout Animus can identify safely.
 - Imports outfit, weapon and crew texture packs from **ZIP, RAR, 7Z, TAR, DDS
   and PNG** sources.
@@ -37,7 +37,7 @@ and do not want to depend on Outfit Workshop for installation.
 - Rename managed entries without changing their installed identity.
 - Update an item by selecting a replacement archive; Animus replaces the
   managed copy while preserving supported metadata.
-- Open managed folders, view details, link a Nexus page and visit it directly.
+- Open managed folders and view detailed package information.
 - Game-folder detection, manual browsing and built-in game launch button.
 - Manages compatible `version.dll` combinations instead of silently
   overwriting them. It shares Ultimate ASI Loader copies, supports its
@@ -120,7 +120,7 @@ included deliberately.
 
 Open the **Mods** tab, choose **Install Mod**, then select a supported `.jmod`
 or `.zip` archive. Animus uses a package manifest when one is provided and can
-import supported ordinary loose-file Nexus archives when their destination can
+import supported ordinary loose-file archives when their destination can
 be inferred safely.
 
 ### Outfits, weapons and crew textures
@@ -134,8 +134,7 @@ conflicts and choose whether to disable them before continuing.
 
 Open the item's `...` menu and select **Update**. During this beta, the update
 workflow asks for the newer archive on your computer and replaces the managed
-version. Direct Nexus downloads are planned but are not enabled until Nexus
-integration is approved.
+version. Online update checking and direct downloading are not implemented.
 
 ---
 
@@ -144,8 +143,8 @@ integration is approved.
 - This is an **unsigned beta executable**. Windows SmartScreen or antivirus
   software may warn about a new, low-reputation application. Verify the
   SHA-256 checksum shown on the Files page and download only from this page.
-- Direct downloads through Nexus are not yet enabled.
-- Metadata quality depends on the archive. Author, version, Nexus page or the
+- Online update checking and direct downloads are not implemented.
+- Metadata quality depends on the archive. Author, version, or the
   vanilla replacement name may show as unknown when the download provides no
   usable information.
 - Automatic archive importing is intentionally conservative. A mod with an
@@ -171,7 +170,6 @@ For the best library information, include:
 - author;
 - version;
 - short description;
-- Nexus mod ID or page;
 - the vanilla outfit/weapon/crew target, when applicable;
 - explicit destination paths for loose files.
 
@@ -185,14 +183,14 @@ still be imported without one.
 
 Please include:
 
-- the archive name and its Nexus page;
+- the archive name and its download page;
 - the exact activity-log message;
 - whether you were installing, enabling, disabling, updating or removing;
 - whether the game was running;
 - your game build/store version;
 - a screenshot when the problem is visual.
 
-Do not upload copyrighted game archives, full game files or personal Nexus
+Do not upload copyrighted game archives, full game files, or account
 credentials with a report.
 
 ---

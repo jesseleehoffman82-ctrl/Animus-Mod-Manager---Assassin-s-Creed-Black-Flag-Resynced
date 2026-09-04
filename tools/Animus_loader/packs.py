@@ -33,7 +33,6 @@ from .texture import PlanItem, parse_filename, plan_texture
 from .crew_catalog import get_crew_target, target_for_filename, target_for_texture
 from .general_texture_catalog import target_for_general_filename
 from .sail_catalog import get_sail_target, target_for_sail_filename
-from .nexus import NEXUS_GAME_ID
 
 #: Default archive packs are injected into.
 OUTFIT_FORGE = "DataPC_boot.forge"
@@ -324,7 +323,7 @@ class PackManager:
     def _pack_metadata(source_dir: Path) -> dict:
         """Extract optional author/version data shipped inside an ordinary pack.
 
-        Nexus archives are inconsistent, so this deliberately accepts common
+        Mod archives are inconsistent, so this deliberately accepts common
         manifest JSON keys and explicit README labels while avoiding guesses
         based on folder or archive names.
         """
@@ -416,10 +415,10 @@ class PackManager:
     @staticmethod
     def _archive_pack_name(extracted: Path, fallback: str) -> str:
         """Keep the mod title distinct from the vanilla outfit it replaces."""
-        nexus_title = re.sub(
+        cleaned_title = re.sub(
             r"\s+\d+\s+\S+\s+\d{4}-\d{2}-\d{2}T.*$", "", fallback).strip()
-        if nexus_title and nexus_title != fallback:
-            return nexus_title
+        if cleaned_title and cleaned_title != fallback:
+            return cleaned_title
         children = [p for p in extracted.iterdir()
                     if p.name not in {"__MACOSX", ".DS_Store"}]
         if len(children) == 1 and children[0].is_dir():
@@ -1218,42 +1217,6 @@ class PackManager:
         meta_path.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
         self._save_library(lib)
 
-    # ------------------------------------------------------------------ #
-    # nexus update tracking
-    # ------------------------------------------------------------------ #
-    def set_nexus(self, pack_id: str, mod_id: int, game_id: int | None = None,
-                  version: str | None = None) -> None:
-        """Attach Nexus metadata and cache its author for the pack table."""
-        pack = self.get_pack(pack_id)
-        if pack is None:
-            raise PackError(f"Unknown pack id: {pack_id}")
-        meta_path = pack.dir / "meta.json"
-        meta = json.loads(meta_path.read_text(encoding="utf-8"))
-        resolved_game_id = game_id or NEXUS_GAME_ID
-        meta["nexus"] = {
-            "game_id": resolved_game_id,
-            "mod_id": int(mod_id),
-        }
-        if version is not None:
-            meta["version"] = str(version)
-        # A linked Nexus page is the best source for archives that do not ship
-        # a manifest/readme author. Metadata lookup is helpful but must not
-        # prevent the link being saved while Nexus is unavailable.
-        try:
-            from .nexus import NexusClient
-            nexus_meta = NexusClient().mod(
-                int(mod_id), int(resolved_game_id))
-            author = nexus_meta.get("uploaded_by") or nexus_meta.get("author")
-            if author:
-                meta["author"] = str(author)
-            if not version and nexus_meta.get("version"):
-                meta["version"] = str(nexus_meta["version"])
-            if nexus_meta.get("summary") and not meta.get("description"):
-                meta["description"] = str(nexus_meta["summary"])
-        except Exception:
-            pass
-        meta_path.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
-
     def _pack_meta(self, pack: Pack) -> dict:
         meta_path = pack.dir / "meta.json"
         if not meta_path.is_file():
@@ -1262,54 +1225,6 @@ class PackManager:
             return json.loads(meta_path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             return {}
-
-    def check_updates(self, client=None) -> list[dict]:
-        """Check all packs (any category) against Nexus for newer versions.
-
-        Returns a list of result dicts: {id, name, category, game_id, mod_id,
-        current, latest, has_update, error}.
-        """
-        from .nexus import NexusClient
-        client = client or NexusClient()
-        results: list[dict] = []
-        for pack in self.list_packs():
-            meta = self._pack_meta(pack)
-            nexus = meta.get("nexus")
-            if not nexus:
-                results.append({"id": pack.id, "name": pack.name,
-                                "category": pack.category,
-                                "game_id": None, "mod_id": None,
-                                "has_update": False,
-                                "error": "no nexus id"})
-                continue
-            game_id = nexus.get("game_id", NEXUS_GAME_ID)
-            mod_id = nexus.get("mod_id")
-            current = meta.get("version")
-            latest = None
-            err = None
-            try:
-                latest = client.latest_version(int(mod_id), int(game_id))
-            except Exception as exc:  # network / api
-                err = str(exc)
-            has_update = False
-            if latest and current and latest != current:
-                try:
-                    has_update = _version_gt(latest, current)
-                except ValueError:
-                    has_update = latest != current
-            results.append({
-                "id": pack.id,
-                "name": pack.name,
-                "category": pack.category,
-                "game_id": game_id,
-                "mod_id": mod_id,
-                "current": current,
-                "latest": latest,
-                "has_update": has_update,
-                "error": err,
-            })
-        return results
-
 
 def _make_id(name: str) -> str:
     base = re.sub(r"[^A-Za-z0-9_]+", "-", name).strip("-").lower() or "pack"

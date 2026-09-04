@@ -39,15 +39,15 @@ in the shared-slot hover information.
 - Do not delete the `mods/backups` or `mods/textures/backups` folders while
   changes are deployed.
 - Include `mods/animus-native-shell.log` and the visible activity log when
-  reporting a failure. The manager never asks for Nexus account credentials.
+  reporting a failure. The manager never asks for mod-site account credentials.
 
 ## Beta limitations
 
 - This release is unsigned. Windows SmartScreen or antivirus software may
   warn about a new, low-reputation executable. Verify the SHA-256 checksum
   before running it. Do not download builds from unofficial mirrors.
-- Direct Nexus downloads are not enabled until Nexus approves the application.
-- Some archives do not provide author, version, Nexus, or replacement-slot
+- Direct mod-site downloads are not implemented.
+- Some archives do not provide author, version, or replacement-slot
   metadata; Animus uses safe detection and displays unknown fields when needed.
 - PNG conversion supports the formats currently handled by the built-in
   texture pipeline. Some texture slots require a game-ready DDS.
@@ -57,11 +57,11 @@ in the shared-slot hover information.
 
 Please include:
 
-- the mod/outfit archive name and its Nexus page;
+- the mod/outfit archive name and its download page;
 - the exact activity-log message;
 - whether the item was installing, enabling, disabling, updating, or removing;
 - whether the game was running;
 - the game build/store version.
 
-Do not upload copyrighted game archives, personal Nexus credentials, or full
+Do not upload copyrighted game archives, account credentials, or full
 game files with a report.

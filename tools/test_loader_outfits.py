@@ -328,7 +328,7 @@ def main() -> int:
     assert pmgr._load_journal() is None
     assert pmgr.active_pack_id() is None
 
-    # 8. One-click install from a .zip archive (the Nexus download shape).
+    # 8. One-click install from a conventional .zip archive.
     import zipfile
     zsrc = TEST_ROOT / "pack_zip" / "download"
     zdir = zsrc / "assin_black_flag" / "outfit"

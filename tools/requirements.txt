@@ -1,12 +1,9 @@
 # Animus Mod & Outfit Manager - Python dependencies
 # Install with:  pip install -r requirements.txt
 
-# Required for unpacking .7z pack archives (Nexus uploads). .zip/.tar use stdlib.
+# Required for unpacking .7z pack archives. .zip/.tar use stdlib.
 py7zr>=1.0
 
-# Native WebView2 desktop shell for the HTML/CSS/JS interface.
-pywebview>=5.0
-
-# Optional: numpy + Pillow are used by the PNG->BC out of fit texture encoder.
+# numpy + Pillow are used by the PNG-to-BC outfit texture encoder.
 numpy
 Pillow

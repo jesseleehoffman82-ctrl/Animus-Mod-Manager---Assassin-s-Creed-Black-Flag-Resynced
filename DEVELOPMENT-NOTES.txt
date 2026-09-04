@@ -25,9 +25,10 @@ APPLICATION ARCHITECTURE
 - Official 7-Zip and DirectXTex utilities provide archive extraction and
   supported texture conversion operations.
 
-The interface is loaded from local files. Direct Nexus downloading is not
-enabled in this beta. The manager patches and restores selected game files on
-disk and does not inject code into the running game process.
+The interface is loaded from local files. No mod-site integration, account
+login, metadata lookup, or direct downloading is implemented. The manager
+patches and restores selected game files on disk and does not inject code into
+the running game process.
 
 SOURCE AND VERIFICATION
 -----------------------

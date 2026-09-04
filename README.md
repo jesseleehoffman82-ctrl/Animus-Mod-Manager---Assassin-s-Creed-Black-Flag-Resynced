@@ -32,7 +32,7 @@ existing installation preserves that data.
 
 ### Mods
 
-Installs conventional Nexus archives and native Animus `.jmod` packages. The
+Installs conventional mod archives and native Animus `.jmod` packages. The
 manager detects known game-relative folders, handles common loose-file mods,
 backs up overwritten files, and restores them when a mod is disabled or
 uninstalled.
@@ -94,7 +94,7 @@ Studio is not included here. Animus uses reversible vanilla sail replacements.
    supported archive/file.
 3. Confirm the vanilla target when the Crew or Sails picker appears.
 4. Use the green checkbox to enable or disable an item.
-5. Open the `•••` menu to update, rename, view details, open its Nexus page, or
+5. Open the `•••` menu to update, rename, view details, or
    uninstall it.
 6. Launch the game through Steam with **Launch Game**.
 
@@ -112,19 +112,12 @@ manager. Uninstalling restores its files and removes it from the library.
 - Animus patches files on disk; it does not inject its own code into the running
   game process.
 
-## Nexus integration and privacy
+## Downloads and privacy
 
-Nexus integration is deliberately metadata-only. Animus uses Nexus Mods'
-public, unauthenticated GraphQL endpoint to read linked mod names, authors,
-versions, summaries, and page information.
-
-- No personal Nexus API key is included, requested, or stored.
-- No Nexus password, OAuth login, or account credential is used.
-- No direct Nexus file downloading is implemented.
-- Downloads remain in the user's browser and are selected locally afterward.
-
-The application continues to work offline for local installation and management
-operations; only optional Nexus metadata requires a network connection.
+Animus contains no mod-site integration, account login, metadata lookup, or
+direct-download feature. Download mod archives with your normal browser and
+select the local files inside the manager. All installation and management
+operations work locally without an internet connection.
 
 ## Supported environment and limitations
 

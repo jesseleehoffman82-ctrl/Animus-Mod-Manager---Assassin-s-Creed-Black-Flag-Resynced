@@ -94,7 +94,7 @@ _RED_STRIPED = SailTarget(0x22063685111, 0, "Red Striped Sails")
 # is also the material containing its single TextureMap slot in DataPC_boot.forge.
 _EXACT_TARGETS = {
     "red striped sails": _RED_STRIPED,
-    # Black Striped Sails BF Logo (Nexus 219) was authored for the Jackdaw-only
+    # Black Striped Sails BF Logo was authored for the Jackdaw-only
     # Red Striped slot, but its archive predates target IDs in filenames.
     "black striped sails bf logo": _RED_STRIPED,
     "white common sails": SailTarget(0x21824073E7D, 0, "White / Common Sails"),

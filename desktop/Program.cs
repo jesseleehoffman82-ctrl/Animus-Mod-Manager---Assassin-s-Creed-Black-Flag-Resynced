@@ -492,15 +492,6 @@ internal sealed class MainForm : Form
             string rpcMethod = method;
             JsonArray rpcArgs = JsonNode.Parse(args.GetRawText())?.AsArray() ?? [];
             var showLaunchOverlay = false;
-            if (method == "open_nexus_page")
-            {
-                Process.Start(new ProcessStartInfo("https://www.nexusmods.com/assassinscreedblackflagresynced/mods/")
-                {
-                    UseShellExecute = true,
-                });
-                await PostResponse(id, new JsonObject { ["result"] = true });
-                return;
-            }
             if (method == "browse_game_dir")
             {
                 using var dialog = new FolderBrowserDialog
@@ -521,7 +512,7 @@ internal sealed class MainForm : Form
             {
                 using var dialog = new OpenFileDialog
                 {
-                    Title = "Select an Animus or Nexus mod archive",
+                    Title = "Select a mod archive",
                     Filter = "All files (*.*)|*.*",
                     Multiselect = false,
                 };

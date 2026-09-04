@@ -252,7 +252,7 @@ class Loader:
     def import_package(self, source: Path) -> tuple[Path, Package, bool]:
         """Import a native .jmod or a conventional loose-file archive.
 
-        Most Nexus authors understandably ship the files a player should copy
+        Many mod authors ship the files a player should copy
         beside the game executable rather than an Animus-specific manifest.
         Convert that well-defined archive shape into an internal .jmod so the
         normal backup, enable/disable, and uninstall machinery still owns every
@@ -311,7 +311,7 @@ class Loader:
         return target, self.read_package(target), True
 
     def _convert_loose_zip(self, source: Path, display_source: Path | None = None) -> Path:
-        """Turn a safe, conventional Nexus loose-file ZIP into a .jmod."""
+        """Turn a safe, conventional loose-file ZIP into a .jmod."""
         archive_source = display_source or source
         documentation_exts = {
             ".txt", ".md", ".rtf", ".pdf", ".png", ".jpg", ".jpeg",
@@ -340,7 +340,7 @@ class Loader:
             if not entries:
                 raise LoaderError(f"'{source.name}' is empty.")
 
-            # Nexus archives often add one wrapper directory. Strip it only
+            # Downloaded archives often add one wrapper directory. Strip it only
             # when every useful file shares it; all remaining paths stay intact.
             first_parts = {path.parts[0] for _, path in entries}
             strip_wrapper = len(first_parts) == 1 and all(len(path.parts) > 1 for _, path in entries)
@@ -405,7 +405,7 @@ class Loader:
                     readme_text = archive.read(item).decode("utf-8", errors="replace")
                     break
             name, version = self._loose_archive_metadata(archive_source.stem, readme_text)
-            nexus_mod_id = self._nexus_archive_mod_id(archive_source.stem)
+            source_mod_id = self._archive_source_mod_id(archive_source.stem)
             safe_name = re.sub(r"[^A-Za-z0-9._-]+", "-", name).strip("-.") or "Imported-Mod"
             target = self.packages_dir / f"{safe_name}.jmod"
             temporary = target.with_suffix(".tmp.jmod")
@@ -416,15 +416,13 @@ class Loader:
                 "version": version,
                 "author": "unknown",
                 "category": "loose-file",
-                "description": "Imported from a conventional Nexus loose-file archive.",
+                "description": "Imported from a conventional loose-file archive.",
                 "source_archive": archive_source.name,
                 "targets": [],
             }
-            if nexus_mod_id is not None:
-                manifest["nexus"] = {"game_id": 9408, "mod_id": nexus_mod_id}
             if selected_root:
                 manifest["selected_archive_root"] = selected_root
-            chain_alias = self._proxy_chain_alias(readme_text, nexus_mod_id)
+            chain_alias = self._proxy_chain_alias(readme_text, source_mod_id)
             if chain_alias:
                 manifest["proxy_chain"] = {
                     "secondary": chain_alias,
@@ -449,17 +447,17 @@ class Loader:
     def _loose_archive_metadata(fallback: str, readme: str) -> tuple[str, str]:
         name = fallback
         version = "1.0"
-        # Nexus download names commonly end with:
+        # Download-service filenames commonly end with:
         #   <mod id> <version> <UTC timestamp> <download token>
         # Remove that transport metadata before showing the package in the UI.
-        nexus_suffix = re.search(
+        download_suffix = re.search(
             r"(?i)\s+\d+\s+v?(\d+(?:\.\d+)*(?:\s*(?:alpha|beta))?)"
             r"\s+\d{4}-\d{2}-\d{2}T[^ ]+\s+[A-Za-z0-9]+$",
             fallback,
         )
-        if nexus_suffix:
-            name = fallback[:nexus_suffix.start()].strip()
-            version = nexus_suffix.group(1).strip()
+        if download_suffix:
+            name = fallback[:download_suffix.start()].strip()
+            version = download_suffix.group(1).strip()
         title = re.search(
             r"(?im)^\s*([A-Z][A-Z0-9 '&_.-]{2,}?)\s+-\s+Assassin(?:'s)? Creed",
             readme,
@@ -469,7 +467,7 @@ class Loader:
         found_version = re.search(r"(?im)^\s*version\s+([^\r\n]+?)\s*$", readme)
         if found_version:
             version = found_version.group(1).strip()
-        elif not nexus_suffix:
+        elif not download_suffix:
             filename_version = re.search(r"(?i)(?:^|[ _-])v?(\d+(?:\.\d+)+(?:\s*(?:alpha|beta))?)", fallback)
             if filename_version:
                 version = filename_version.group(1).strip()
@@ -503,8 +501,8 @@ class Loader:
         return ranked[0][1]
 
     @staticmethod
-    def _nexus_archive_mod_id(fallback: str) -> int | None:
-        """Read Nexus' trailing mod id from a downloaded archive filename."""
+    def _archive_source_mod_id(fallback: str) -> int | None:
+        """Read a download service's trailing mod id from an archive filename."""
         match = re.search(
             r"(?i)\s+(\d+)\s+v?\d+(?:\.\d+)*(?:\s*(?:alpha|beta))?"
             r"\s+\d{4}-\d{2}-\d{2}T[^ ]+\s+[A-Za-z0-9]+$",
@@ -513,12 +511,12 @@ class Loader:
         return int(match.group(1)) if match else None
 
     @staticmethod
-    def _proxy_chain_alias(readme: str, nexus_mod_id: int | None) -> str | None:
+    def _proxy_chain_alias(readme: str, source_mod_id: int | None) -> str | None:
         """Return a documented secondary proxy filename, never a guess.
 
         Proxy DLLs are executable code; renaming one arbitrarily is unsafe.
         A chain is enabled only when an included readme explicitly documents
-        it, or when a reviewed Nexus-specific rule records the same published
+        it, or when a reviewed package-specific rule records the same published
         installation instruction.
         """
         documented = re.search(
@@ -528,9 +526,9 @@ class Loader:
         )
         if documented:
             return documented.group(1).lower()
-        # Nexus mod 428 explicitly instructs users to rename an existing
-        # version.dll to wininet.dll so its proxy can load it.
-        return "wininet.dll" if nexus_mod_id == 428 else None
+        # The reviewed Walk By Default package instructs users to rename an
+        # existing version.dll to wininet.dll so its proxy can load it.
+        return "wininet.dll" if source_mod_id == 428 else None
 
     def _manifest_to_package(self, manifest: dict, archive) -> Package:
         if manifest.get("format") != FORMAT:
@@ -730,45 +728,6 @@ class Loader:
             conflicts.append({"dest": dest, "names": [item["name"] for item in owners]})
         return conflicts
 
-    def set_nexus(self, name: str, mod_id: int, game_id: int | None = None,
-                  version: str | None = None) -> None:
-        """Attach Nexus mod metadata to a .jmod package manifest (for update
-        checks). Rewrites the package in place."""
-        import zipfile
-        path = next((p for p in self.discover_packages()
-                     if self._name_of_package(p) == name), None)
-        if path is None:
-            raise LoaderError(f"Unknown mod: {name}")
-        from .nexus import NEXUS_GAME_ID, NexusClient
-        resolved_game_id = game_id or NEXUS_GAME_ID
-        nexus_meta: dict = {}
-        try:
-            nexus_meta = NexusClient().mod(int(mod_id), int(resolved_game_id))
-        except Exception:
-            # Saving the public page link must still work while Nexus is down.
-            pass
-        tmp = path.with_suffix(".tmp.jmod")
-        with zipfile.ZipFile(path) as src, zipfile.ZipFile(tmp, "w") as dst:
-            manifest = json.loads(src.read("manifest.json").decode("utf-8"))
-            manifest["nexus"] = {
-                "game_id": resolved_game_id,
-                "mod_id": int(mod_id),
-            }
-            if version is not None:
-                manifest["version"] = str(version)
-            elif nexus_meta.get("version"):
-                manifest["version"] = str(nexus_meta["version"])
-            if nexus_meta.get("author"):
-                manifest["author"] = str(nexus_meta["author"])
-            if nexus_meta.get("summary") and not manifest.get("description"):
-                manifest["description"] = str(nexus_meta["summary"])
-            for item in src.infolist():
-                data = src.read(item.filename)
-                if item.filename == "manifest.json":
-                    data = json.dumps(manifest, indent=2).encode("utf-8")
-                dst.writestr(item, data)
-        tmp.replace(path)
-
     def rename(self, old_name: str, new_name: str) -> None:
         """Rename a managed mod while retaining its deployment record."""
         new_name = str(new_name).strip()
@@ -809,49 +768,6 @@ class Loader:
             return self.read_package(path).name
         except LoaderError:
             return path.stem
-
-    def check_updates(self, client=None) -> list[dict]:
-        """Check all .jmod packages that carry a Nexus id for updates."""
-        from .nexus import NexusClient
-        client = client or NexusClient()
-        results: list[dict] = []
-        for path in self.discover_packages():
-            try:
-                pkg = self.read_package(path)
-            except LoaderError:
-                continue
-            manifest = pkg.manifest
-            nexus = manifest.get("nexus")
-            if not nexus:
-                results.append({"name": pkg.name, "path": str(path),
-                                "has_update": False, "mod_id": None, "error": "no nexus id"})
-                continue
-            game_id = nexus.get("game_id", 9408)
-            mod_id = nexus.get("mod_id")
-            current = pkg.version
-            latest = None
-            err = None
-            try:
-                latest = client.latest_version(int(mod_id), int(game_id))
-            except Exception as exc:
-                err = str(exc)
-            has_update = False
-            if latest and current and latest != current:
-                try:
-                    has_update = _version_gt(latest, current)
-                except ValueError:
-                    has_update = latest != current
-            results.append({
-                "name": pkg.name,
-                "path": str(path),
-                "game_id": game_id,
-                "mod_id": mod_id,
-                "current": current,
-                "latest": latest,
-                "has_update": has_update,
-                "error": err,
-            })
-        return results
 
     # ------------------------------------------------------------------ #
     # apply
@@ -1307,7 +1223,7 @@ class Loader:
 
         # Some custom proxies explicitly support loading a second proxy under
         # another DLL name. Never invent this alias: it comes from a reviewed
-        # Nexus rule or the package's own install documentation.
+        # Package-specific rule or the package's own install documentation.
         managed = self._managed_owner_for_bytes("version.dll", existing)
         incoming_chain = pkg.manifest.get("proxy_chain")
         incoming_alias = (

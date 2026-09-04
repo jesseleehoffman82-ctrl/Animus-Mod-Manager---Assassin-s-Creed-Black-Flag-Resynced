@@ -19,8 +19,7 @@ from pathlib import Path
 
 from .core import DEFAULT_GAME_DIR, Loader, LoaderError
 from .outfits import OutfitError
-from .packs import CATEGORY_OUTFIT, CATEGORY_WEAPON, PackError, PackManager, NEXUS_GAME_ID
-from .nexus import NexusClient, NexusError
+from .packs import CATEGORY_OUTFIT, CATEGORY_WEAPON, PackError, PackManager
 
 
 def _loader(args) -> Loader:
@@ -227,70 +226,6 @@ def cmd_pack_order(category: str, label: str) -> callable:
     return run
 
 
-def cmd_pack_set_nexus(category: str, label: str) -> callable:
-    def run(args) -> int:
-        mgr = _packs(args)
-        mgr.set_nexus(args.id, args.mod_id, game_id=args.game_id or NEXUS_GAME_ID,
-                      version=args.version)
-        print(f"Linked {args.id} -> Nexus mod {args.mod_id} (game {args.game_id or NEXUS_GAME_ID}).")
-        return 0
-    return run
-
-
-def cmd_pack_check_updates(category: str, label: str) -> callable:
-    def run(args) -> int:
-        mgr = _packs(args)
-        results = mgr.check_updates()
-        cats = [r for r in results if r["category"] == category]
-        if not cats:
-            print(f"No {label} packs with Nexus ids.")
-            return 0
-        for r in cats:
-            if r.get("error"):
-                print(f"{r['name']}: ERROR {r['error']}")
-            elif r["mod_id"] is None:
-                print(f"{r['name']}: no nexus id set")
-            elif r["has_update"]:
-                print(f"UPDATE {r['name']}: {r['current']} -> {r['latest']}  (nexus {r['mod_id']})")
-            else:
-                print(f"   up-to-date  {r['name']}: {r['latest']}")
-        return 0
-    return run
-
-
-def cmd_mod_set_nexus(args) -> int:
-    loader = _loader(args)
-    loader.set_nexus(args.name, args.mod_id, game_id=args.game_id or NEXUS_GAME_ID,
-                     version=args.version)
-    print(f"Linked mod '{args.name}' -> Nexus mod {args.mod_id}.")
-    return 0
-
-
-def cmd_mod_check_updates(args) -> int:
-    loader = _loader(args)
-    results = loader.check_updates()
-    found = False
-    for r in results:
-        if r.get("mod_id") is None:
-            continue
-        found = True
-        if r.get("error"):
-            print(f"{r['name']}: ERROR {r['error']}")
-        elif r.get("has_update"):
-            print(f"UPDATE {r['name']}: {r.get('current') or '?'} -> {r['latest']}  (nexus {r['mod_id']})")
-        else:
-            print(f"   up-to-date  {r['name']}: {r.get('latest')}")
-    if not found:
-        print("No mods have a Nexus id set. Use 'mod-set-nexus <name> <mod-id>'.")
-    return 0
-
-
-def cmd_mod_update(args) -> int:
-    print("Direct Nexus downloads are disabled. Download the update in your browser, "
-          "then use the manager's Update action to select the replacement archive.")
-    return 0
-
-
 def cmd_pack_install(category: str, label: str) -> callable:
     def run(args) -> int:
         mgr = _packs(args)
@@ -348,17 +283,9 @@ def cmd_outfit_order(args) -> int:
     return cmd_pack_order(CATEGORY_OUTFIT, "outfit")(args)
 
 
-def cmd_outfit_set_nexus(args) -> int:
-    return cmd_pack_set_nexus(CATEGORY_OUTFIT, "outfit")(args)
-
-
-def cmd_outfit_check_updates(args) -> int:
-    return cmd_pack_check_updates(CATEGORY_OUTFIT, "outfit")(args)
-
-
 def _add_pack_group(sub, name: str, help_text: str,
                     list_fn, import_fn, install_fn, switch_fn, revert_fn, status_fn,
-                    enable_fn, apply_fn, order_fn, set_nexus_fn, check_fn) -> None:
+                    enable_fn, apply_fn, order_fn) -> None:
     group = sub.add_parser(name, help=help_text)
     group_sub = group.add_subparsers(dest=f"{name}_command", required=True)
 
@@ -391,16 +318,6 @@ def _add_pack_group(sub, name: str, help_text: str,
     o = group_sub.add_parser("order", help="Set order (comma-separated ids, bottom wins)")
     o.add_argument("order")
     o.set_defaults(func=order_fn)
-
-    sn = group_sub.add_parser("set-nexus", help="Attach a Nexus mod id to a pack (for update checks)")
-    sn.add_argument("id")
-    sn.add_argument("mod_id", type=int)
-    sn.add_argument("--game-id", type=int, default=None)
-    sn.add_argument("--version", default=None, help="Installed version to compare against")
-    sn.set_defaults(func=set_nexus_fn)
-
-    up = group_sub.add_parser("check-updates", help=f"Check {name} packs on Nexus for updates")
-    up.set_defaults(func=check_fn)
 
     v = group_sub.add_parser("revert", help=f"Revert a {name} pack (or all if no id) to vanilla")
     v.add_argument("pack_id", nargs="?", default=None)
@@ -441,26 +358,11 @@ def build_parser() -> argparse.ArgumentParser:
     g = sub.add_parser("game-dir", help="Show the game folder")
     g.set_defaults(func=cmd_game_dir)
 
-    mn = sub.add_parser("mod-set-nexus", help="Attach a Nexus mod id to a .jmod mod")
-    mn.add_argument("name")
-    mn.add_argument("mod_id", type=int)
-    mn.add_argument("--game-id", type=int, default=None)
-    mn.add_argument("--version", default=None)
-    mn.set_defaults(func=cmd_mod_set_nexus)
-
-    mc = sub.add_parser("mod-check-updates", help="Check .jmod mods on Nexus for updates")
-    mc.set_defaults(func=cmd_mod_check_updates)
-
-    mu = sub.add_parser("mod-update", help="Explain the manual Nexus update workflow")
-    mu.add_argument("name")
-    mu.set_defaults(func=cmd_mod_update)
-
     _add_pack_group(sub, "outfit", "Outfit manager commands",
                     cmd_outfit_list, cmd_outfit_import,
                     cmd_outfit_install, cmd_outfit_switch,
                     cmd_outfit_revert, cmd_outfit_status,
-                    cmd_outfit_enable, cmd_outfit_apply, cmd_outfit_order,
-                    cmd_outfit_set_nexus, cmd_outfit_check_updates)
+                    cmd_outfit_enable, cmd_outfit_apply, cmd_outfit_order)
     _add_pack_group(sub, "weapon", "Weapon manager commands",
                     cmd_pack_list(CATEGORY_WEAPON, "weapons"),
                     cmd_pack_import(CATEGORY_WEAPON, "weapon"),
@@ -470,9 +372,7 @@ def build_parser() -> argparse.ArgumentParser:
                     cmd_pack_status(CATEGORY_WEAPON, "weapon"),
                     cmd_pack_enable(CATEGORY_WEAPON, "weapon"),
                     cmd_pack_apply(CATEGORY_WEAPON, "weapon"),
-                    cmd_pack_order(CATEGORY_WEAPON, "weapon"),
-                    cmd_pack_set_nexus(CATEGORY_WEAPON, "weapon"),
-                    cmd_pack_check_updates(CATEGORY_WEAPON, "weapon"))
+                    cmd_pack_order(CATEGORY_WEAPON, "weapon"))
 
     return parser
 
@@ -482,7 +382,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return args.func(args)
-    except (LoaderError, OutfitError, PackError, NexusError, OSError) as exc:
+    except (LoaderError, OutfitError, PackError, OSError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
 

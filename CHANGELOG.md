@@ -18,11 +18,13 @@
   other tabs in the same complete, journaled FORGE deployment.
 - Kept Jackdaw Drydock Studio's separate-slot hull/sail injection system fully
   independent; Animus continues to use reversible vanilla replacements.
+- Removed all mod-site metadata, account, update-checking, and direct-download
+  integration. Archives are downloaded separately and selected locally.
 
 ## 0.1.6 Beta — 2026-09-03
 
 - Added a dedicated Sails tab with install, update, rename, enable/disable,
-  uninstall, Nexus metadata, and restore-to-vanilla workflows.
+  uninstall, package details, and restore-to-vanilla workflows.
 - Added vanilla sail replacement labels and shared-slot detection, including
   disabled designs that still occupy the same sail slot.
 - Added the outfit-style conflict prompt so enabling or installing a competing
@@ -43,13 +45,10 @@
 
 ## 0.1.5 Beta — 2026-09-03
 
-- Replaced the retired personal-key and Nexus SSO integration with public,
-  unauthenticated Nexus GraphQL metadata lookups.
-- Removed direct Nexus file-download code; downloads remain in the user's
-  browser and updates are installed from a selected local archive.
-- Corrected the Black Flag Resynced Nexus game identifier to 9408.
-- Added release auditing that rejects legacy Nexus credentials, authentication
-  endpoints, or direct-download code before a Nexus package can be created.
+- Removed the retired account-authentication and direct-download implementation;
+  updates are installed from a selected local archive.
+- Added release auditing that rejects credential, authentication, or download
+  code before a public package can be created.
 - Added reversible multi-proxy DLL chaining for documented secondary aliases,
   including Walk By Default's `version.dll` → `wininet.dll` compatibility rule.
 - Made supported custom-proxy chaining independent of installation order and
@@ -68,7 +67,7 @@
   the normal Mods tab using the same safe extraction and backup workflow.
 - Added managed `videos/*.webm` replacement support for intro-skip and other
   game-root video packages, including complete restoration on disable/remove.
-- Cleaned Nexus transport metadata from automatically detected mod names.
+- Cleaned download-service transport metadata from automatically detected mod names.
 - Fixed large loose-file and video mods duplicating backup data into the
   installed-state file, which could block game detection, mod loading, and
   complete uninstall operations.
@@ -98,10 +97,10 @@
   uninstall workflows.
 - ZIP/RAR/7Z outfit, weapon, and crew texture-pack installation.
 - MO2-style persistent managed library with reversible deployment and backups.
-- Vanilla outfit replacement labels, authors, Nexus links, and shared-slot
+- Vanilla outfit replacement labels, authors, package details, and shared-slot
   detection.
 - Shared outfit-slot confirmation that disables all enabled alternatives
   before activating a replacement.
-- Automatic ordinary Nexus archive import when `manifest.json` is absent.
+- Automatic ordinary archive import when `manifest.json` is absent.
 - Compatibility handling for supported `version.dll` proxy combinations.
 - Portable preloader and in-game loaded-mod confirmation.
