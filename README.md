@@ -1,175 +1,157 @@
 # Animus Mod & Outfit Manager
 
-Standalone mod loader project for Assassin's Creed IV: Black Flag Resynced.
+**Version 0.1.7 Beta — Assassin's Creed IV: Black Flag Resynced**
 
-This folder is intentionally separate from `jackdaw-workshop` so the mod loader can become its own app, package format, and installer without tangling it with the ship preview/editor prototype.
+Animus Mod & Outfit Manager is a lightweight, MO2-inspired manager built
+specifically for Black Flag Resynced. It brings ordinary mods, custom outfits,
+weapon skins, crew textures, and Jackdaw sail designs into one focused desktop
+application with reversible deployment and clear conflict information.
 
-## Current Contents
+![Animus Mod & Outfit Manager](tools/Animus_loader/web/assets/amm-header.jpg)
 
-```text
-jackdaw-mod-loader/
-  README.md
-  mods/
-    LOADER_APP_SPEC.md
-    README.md
-    backups/
-    installed/
-    packages/
-    schema/
-    source/
-  tools/
-    jmod.py
-```
+> This is a public beta for a young and rapidly changing modding scene. Keep
+> the game closed while installing, enabling, disabling, or removing content.
 
-## Desktop interface
+## Download
 
-Run `Start-Animus-Mod-Manager.cmd` to open the current HTML/CSS/JavaScript
-interface in its native .NET WebView2 window. The native host runs backend
-operations in isolated Python worker processes, so Python never owns or blocks
-the desktop message loop. Mod installation logic remains in the tested backend
-modules.
+Download the current portable package from the
+[0.1.7 Beta release](https://github.com/jesseleehoffman82-ctrl/Animus-Mod-Manager---Assassin-s-Creed-Black-Flag-Resynced/releases/tag/v0.1.7-beta).
 
-## First Goal
+1. Install the Microsoft **.NET 10 Desktop Runtime x64**.
+2. Download the `win-x64.zip` release asset.
+3. Extract the complete ZIP to a normal folder. Do not run it from inside the
+   archive.
+4. Run `AnimusModManager.exe`.
+5. Select or detect the Black Flag Resynced game folder.
 
-Build a small Lenny's Mod Loader-style app:
+Animus keeps its managed library, deployment state, and recovery information
+inside its own application folder. Installing a newer numbered release over an
+existing installation preserves that data.
 
-- scan `.jmod` packages
-- validate manifests
-- show conflicts and load order
-- keep game files untouched until Apply
-- dry-run FORGE installs
-- backup and restore originals
-- revalidate mods after game updates
+## What each tab manages
 
-## Current Resynced Reality
+### Mods
 
-Resynced does not have official AnvilToolkit support yet, and the public modding scene is still young. The loader should not assume every mod is a texture mod.
+Installs conventional Nexus archives and native Animus `.jmod` packages. The
+manager detects known game-relative folders, handles common loose-file mods,
+backs up overwritten files, and restores them when a mod is disabled or
+uninstalled.
 
-V1 should support several practical mod types:
+Animus can safely share identical Ultimate ASI Loader proxies and supports a
+documented secondary DLL name when a mod provides a compatible chaining rule.
+It does **not** merge unrelated `version.dll` binaries or make executable hooks
+from an older game update compatible with a newer build.
 
-- FORGE resource mods when the replacement is already game-ready
-- loose-file mods copied into known game folders
-- compatible proxy-DLL chains where the loader or mod author documents a safe
-  secondary filename (`versionHooked.dll` or `wininet.dll`)
-- reversible config patches
-- save/profile utilities
-- runtime-assisted mods later, after stable signatures are mapped
+### Outfits
 
-The key rule is that v1 should not require AnvilToolkit.
+Installs and manages custom Edward outfit replacements without requiring a
+separate outfit installation utility. Known texture targets are read from the
+pack, displayed as the vanilla outfit being replaced, and patched directly into
+the appropriate game archive resources.
 
-`version.dll` is a single Windows loader entry point, so Animus never merges
-arbitrary DLL binaries. Identical/Ultimate ASI Loader copies are shared. A
-custom proxy can coexist when Ultimate ASI Loader or the mod's documented
-installation rule provides a secondary filename; otherwise Animus blocks the
-second proxy without overwriting the active one.
+Several outfits may remain installed. When two outfits share the same vanilla
+slot, Animus identifies every occupant—including disabled ones—and asks before
+disabling an enabled conflict.
 
-## Companion Project
+### Weapons
 
-Runtime hook research now lives beside this loader:
+Manages weapon texture replacements with the same enable, update, rename,
+restore, and uninstall workflow. Texture files are validated against the target
+material and slot before deployment.
 
-```text
-../resynced-script-hook/
-```
+### Crew
 
-The loader should eventually install or manage the hook, but the native hook stays separate so file-based mod installs and runtime modding can evolve independently.
+Manages Jackdaw crew textures using 40 measured vanilla targets. During
+installation you can:
 
-## Helper Commands
+- choose **automatic filename detection** for a complete, correctly named
+  multi-texture crew pack; or
+- assign a single generic DDS/PNG texture to a specific vanilla crew target.
 
-```powershell
-python .\tools\jmod.py validate .\mods\source\01-jackdaw-cosmetic-pack
-python .\tools\jmod.py pack .\mods\source\01-jackdaw-cosmetic-pack
-python .\tools\jmod.py inspect .\mods\packages\Example-1.0.0.jmod
-```
+The Crew table shows exactly which vanilla crew texture is replaced. Packs
+sharing a target are identified even while disabled, and enabling a conflict
+opens the same confirmation workflow used for outfits and sails.
 
-## Outfit & Weapon Manager
+### Sails
 
-The loader includes a built-in **Texture Manager** for outfit and weapon skins
-(the OUTFIT MANAGER and WEAPON MANAGER buttons in the GUI, or the `outfit` /
-`weapon` CLI commands). It is **completely independent of Outfit Workshop** --
-OW never needs to be installed or opened. The manager reads the downloaded
-pack's texture files itself and injects them into the game with its own code.
+Installs custom Jackdaw sail designs without depending on a separate sail
+installation utility. Animus asks which vanilla sail cosmetic the design should
+replace and offers 45 targets validated against the current Title Update 1.0.7
+archive.
 
-### One-click install
+Multiple sail designs can be installed and enabled together when they target
+different vanilla sail sets. If a new design uses an occupied target, Animus
+warns you and can disable the enabled design already using that target. Updating
+a sail retains its chosen target.
 
-Pick a downloaded pack (`.zip`, `.7z`, `.tar`, single `.dds`/`.png`, or an
-extracted folder) and the manager imports it **and activates it** in one step -
-no manual texture mapping, no running OW. Packs that ship textures nested in
-subfolders are found automatically.
+The separate cosmetic-slot injection system developed for Jackdaw Drydock
+Studio is not included here. Animus uses reversible vanilla sail replacements.
 
-How it works:
+## Common workflow
 
-- An outfit or weapon skin is a folder of texture files named with a material
-  id + slot (e.g. `hood_0x22D90B0A877_slot1_mask.dds`). DDS are used as-is;
-  PNG are re-encoded to the slot's BC format (BC1/BC3) with a full mip chain.
-- Importing copies the textures into `mods/textures/<pack-id>/` and validates
-  each one against the actual `DataPC_boot.forge` slot (size, format family,
-  colour space).
-- **Outfits and weapons each have their own tab/list.** Many packs can be
-  **enabled** at once (tick the ON column), the list is **reorderable** (MOVE
-  UP / MOVE DOWN), and **APPLY CHANGES** merges all enabled packs in a tab into
-  one injected set. When two enabled packs touch the same forge slot, the
-  **bottom-most pack wins** and a conflict is logged. This is the MO2/Lenny's
-  model: toggles are independent of order, and apply is explicit (nothing
-  touches the game until you click APPLY CHANGES).
-- **RESTORE TO VANILLA** reverts whatever is currently injected, byte-for-byte.
-- Injection writes external texture mips in place and re-packs the embedded
-  mip tail by appending the material and repointing its TOC entry. Every write
-  is journaled with byte backups (`mods/textures/journal.json` + `backups/`),
-  so the active set can always be reverted to vanilla.
+1. Open the appropriate tab.
+2. Select **Install** and choose a downloaded ZIP, 7z, RAR, DDS, PNG, or other
+   supported archive/file.
+3. Confirm the vanilla target when the Crew or Sails picker appears.
+4. Use the green checkbox to enable or disable an item.
+5. Open the `•••` menu to update, rename, view details, open its Nexus page, or
+   uninstall it.
+6. Launch the game through Steam with **Launch Game**.
 
-CLI:
+Disabling a managed item restores the affected data and leaves the item in the
+manager. Uninstalling restores its files and removes it from the library.
 
-```powershell
-python .\tools\Animus_loader\cli.py outfit install .\path\to\outfit.zip
-python .\tools\Animus_loader\cli.py weapon install .\path\to\weapon.7z
-python .\tools\Animus_loader\cli.py outfit enable <id> on --apply
-python .\tools\Animus_loader\cli.py outfit enable <id> off
-python .\tools\Animus_loader\cli.py outfit order <id1>,<id2>,<id3>   # bottom wins
-python .\tools\Animus_loader\cli.py outfit apply
-python .\tools\Animus_loader\cli.py outfit list|import|switch|revert|status
-python .\tools\Animus_loader\cli.py weapon enable <id> on --apply
-python .\tools\Animus_loader\cli.py weapon apply
-python .\tools\Animus_loader\cli.py outfit revert   # restore vanilla
+## Deployment and recovery
 
-# Nexus metadata links
-python .\tools\Animus_loader\cli.py mod-set-nexus "<mod-name>" <mod-id>
-python .\tools\Animus_loader\cli.py mod-check-updates
-python .\tools\Animus_loader\cli.py outfit set-nexus <pack-id> <mod-id>
-python .\tools\Animus_loader\cli.py outfit check-updates
-```
+- Texture replacements patch validated resources in `DataPC_boot.forge`.
+- External mip writes and repointed material data are journaled.
+- Original bytes are backed up before a write is made.
+- Enabled texture packs are rebuilt from a known vanilla baseline.
+- Game-update detection avoids restoring stale material pointers over a newly
+  updated Ubisoft archive.
+- Animus patches files on disk; it does not inject its own code into the running
+  game process.
 
-Notes / limits:
+## Nexus integration and privacy
 
-- Requires the game's `oo2core_*_win64.dll` (present in the game folder) for
-  Oodle compression.
-- BC7 (normal/surface) slots need a ready DDS; PNG can only encode BC1/BC3.
-- Keep the game closed while applying/reverting.
-- The outfit tab's enabled set and the weapon tab's enabled set are each
-  applied independently. If you happen to enable an outfit and weapon that
-  touch the *identical* forge slot, the two Apply presses each take effect for
-  their own category (last apply wins) -- the visible "current applied state"
-  is whatever you applied most recently.
+Nexus integration is deliberately metadata-only. Animus uses Nexus Mods'
+public, unauthenticated GraphQL endpoint to read linked mod names, authors,
+versions, summaries, and page information.
 
-## Nexus metadata and update checks
+- No personal Nexus API key is included, requested, or stored.
+- No Nexus password, OAuth login, or account credential is used.
+- No direct Nexus file downloading is implemented.
+- Downloads remain in the user's browser and are selected locally afterward.
 
-The manager can check whether a `.jmod` mod or an outfit/weapon pack has a
-newer version on Nexus, like MO2's "Mod Update Check". It reads public mod
-metadata through the Nexus Mods GraphQL endpoint. No Nexus login, API key, or
-account credential is requested or stored.
+The application continues to work offline for local installation and management
+operations; only optional Nexus metadata requires a network connection.
 
-To use it:
+## Supported environment and limitations
 
-1. Link each mod/pack to its Nexus mod id:
-   - `.jmod` mods: `cli.py mod-set-nexus "<mod-name>" <mod-id> --version <installed>`
-     (or add a `nexus: { game_id, mod_id }` block to the manifest).
-   - outfit/weapon packs: `cli.py outfit set-nexus <pack-id> <mod-id> --version <installed>`
-2. Use the item's Nexus action or update check to view its public metadata and
-   open its mod page.
-3. Download updates manually in your browser, then choose **Update Mod** in
-   Animus and select the downloaded archive.
-   Texture Manager (for packs) -- items whose installed version is older than
-   the Nexus latest are flagged.
+- Windows 10/11 x64
+- Assassin's Creed IV: Black Flag Resynced
+- Microsoft .NET 10 Desktop Runtime x64
+- Microsoft Edge WebView2 Runtime
+- PNG conversion supports compatible BC1/BC3 targets; BC7 targets require a
+  game-ready DDS.
+- Script hooks and ASI mods may require updates whenever Ubisoft changes the
+  executable. File management cannot repair an outdated binary hook.
+- Spanish sails currently remain excluded from selectable targets because they
+  live in a separate FORGE archive that requires its own transaction journal.
 
-Only mods/packs that have a Nexus id are checked; others are skipped. The game
-id is Assassin's Creed IV: Black Flag Resynced's Nexus id (9408). Metadata
-requires network access; installing and managing local archives works offline.
+## Building and reviewing the source
+
+The authored C#, Python, HTML, CSS, and JavaScript source is available in this
+repository. See [BUILDING.md](BUILDING.md) for dependency setup, build commands,
+and regression-test instructions. Third-party runtimes and compiled utilities
+are intentionally excluded from the source-only review archive.
+
+Development was human-directed and AI-assisted. Additional details are recorded
+in [DEVELOPMENT-NOTES.txt](DEVELOPMENT-NOTES.txt).
+
+## Feedback
+
+Please report successful installations as well as failures, game-build
+compatibility problems, incorrect texture targets, and archives Animus cannot
+recognize. Include the mod name, archive structure, selected tab/target, and the
+Activity message when possible.

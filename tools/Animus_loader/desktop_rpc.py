@@ -18,6 +18,7 @@ from .core import DEFAULT_GAME_DIR, Loader, LoaderError
 from .game_launch import game_executable, launch_game as launch_selected_game, steam_build_id
 from .nexus import NexusClient, mod_page_url
 from .packs import CATEGORY_CREW, CATEGORY_GENERAL, CATEGORY_OUTFIT, CATEGORY_SAIL, CATEGORY_WEAPON, PackError, PackManager
+from .crew_catalog import crew_targets
 from .sail_catalog import sail_targets
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -216,6 +217,27 @@ class DesktopRpc:
                     for target in sail_targets()
                 ],
                 "default_id": "common",
+            }, None
+
+        if method == "get_crew_targets":
+            return {
+                "targets": [
+                    {
+                        "id": "auto",
+                        "name": "Detect targets from filenames (full crew pack)",
+                        "kind": "auto",
+                    },
+                    *[
+                        {
+                            "id": target.id,
+                            "name": target.display_name,
+                            "kind": "crew-texture",
+                            "resource_id": f"0x{target.texture_id:X}",
+                        }
+                        for target in crew_targets()
+                    ],
+                ],
+                "default_id": "auto",
             }, None
 
         if method in {"set_game_dir", "detect_game_dir"}:
@@ -428,8 +450,13 @@ class DesktopRpc:
         if method == "install_pack_path":
             category, path = str(args[0]), Path(args[1])
             sail_target_id = str(args[2]) if category == CATEGORY_SAIL and len(args) > 2 else None
+            crew_target_id = str(args[2]) if category == CATEGORY_CREW and len(args) > 2 else None
             pack = self.manager.import_pack(
-                path, category=category, sail_target_id=sail_target_id)
+                path,
+                category=category,
+                sail_target_id=sail_target_id,
+                crew_target_id=crew_target_id,
+            )
             conflicts = self.manager.enabled_conflicts(pack)
             if conflicts:
                 self.log(
@@ -501,12 +528,16 @@ class DesktopRpc:
             # A sail update replaces the design, not the user's chosen vanilla
             # target. Keep that assignment stable across reinstall/update.
             retained_sail_target = None
+            retained_crew_target = None
             if category == CATEGORY_SAIL:
                 retained_sail_target = str(old_meta.get("sail_target_id") or "").strip() or None
+            elif category == CATEGORY_CREW:
+                retained_crew_target = str(old_meta.get("crew_target_id") or "").strip() or "auto"
             new_pack = self.manager.import_pack(
                 source,
                 category=category,
                 sail_target_id=retained_sail_target,
+                crew_target_id=retained_crew_target,
             )
             new_meta_path = new_pack.dir / "meta.json"
             new_meta = self.manager._pack_meta(new_pack)

@@ -10,6 +10,12 @@
   different targets; designs assigned to the same target use the existing
   conflict warning and replacement workflow.
 - Sail updates now retain their previously selected vanilla target.
+- Added a Crew target picker with automatic multi-texture pack detection or
+  manual assignment to one of 40 validated individual crew textures.
+- Crew rows now identify the replaced vanilla texture and show every installed
+  pack sharing that target, including disabled packs.
+- Rebuilding one texture category now preserves enabled replacements from all
+  other tabs in the same complete, journaled FORGE deployment.
 - Kept Jackdaw Drydock Studio's separate-slot hull/sail injection system fully
   independent; Animus continues to use reversible vanilla replacements.
 

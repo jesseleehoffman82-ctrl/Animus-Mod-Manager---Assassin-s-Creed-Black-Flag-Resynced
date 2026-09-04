@@ -30,7 +30,7 @@ from pathlib import Path
 
 from .forge import ForgeArchive, ForgeError, Oodle, compress_material
 from .texture import PlanItem, parse_filename, plan_texture
-from .crew_catalog import target_for_filename, target_for_texture
+from .crew_catalog import get_crew_target, target_for_filename, target_for_texture
 from .general_texture_catalog import target_for_general_filename
 from .sail_catalog import get_sail_target, target_for_sail_filename
 from .nexus import NEXUS_GAME_ID
@@ -232,7 +232,8 @@ class PackManager:
     # ------------------------------------------------------------------ #
     def import_pack(self, source_dir: Path, name: str | None = None,
                     category: str = CATEGORY_OUTFIT,
-                    sail_target_id: str | None = None) -> Pack:
+                    sail_target_id: str | None = None,
+                    crew_target_id: str | None = None) -> Pack:
         """Import a folder/archive of DDS/PNG textures (named mat id + slot).
 
         `source_dir` can be a folder, a `.zip`, a `.7z` (if py7zr installed),
@@ -250,13 +251,15 @@ class PackManager:
                     self._extract_archive(source_dir, tmp)
                     detected_name = name or self._archive_pack_name(tmp, source_dir.stem)
                     return self.import_pack(tmp, name=detected_name, category=category,
-                                            sail_target_id=sail_target_id)
+                                            sail_target_id=sail_target_id,
+                                            crew_target_id=crew_target_id)
                 finally:
                     shutil.rmtree(tmp, ignore_errors=True)
             if suffix in (".dds", ".png"):
                 self._validate_pack_category([source_dir], category, {}, source_dir.parent)
                 return self._import_files([source_dir], name or source_dir.stem,
-                                          category, str(source_dir), {}, sail_target_id)
+                                          category, str(source_dir), {}, sail_target_id,
+                                          crew_target_id)
             raise PackError(f"Unsupported pack file: {source_dir.name}")
         if not source_dir.is_dir():
             raise PackError(f"Not a folder or archive: {source_dir}")
@@ -274,7 +277,7 @@ class PackManager:
         self._validate_pack_category(files, category, metadata, source_dir)
         name = (name or metadata.get("name") or source_dir.name).strip() or "Unnamed Pack"
         return self._import_files(files, name, category, str(source_dir), metadata,
-                                  sail_target_id)
+                                  sail_target_id, crew_target_id)
 
     @staticmethod
     def _validate_pack_category(files: list[Path], requested: str,
@@ -524,7 +527,8 @@ class PackManager:
 
     def _import_files(self, files: list, name: str, category: str,
                       source_label: str, metadata: dict | None = None,
-                      sail_target_id: str | None = None) -> Pack:
+                      sail_target_id: str | None = None,
+                      crew_target_id: str | None = None) -> Pack:
         """Validate + copy a set of texture files into a new library pack."""
         import shutil
         pack_id = _make_id(name)
@@ -545,6 +549,18 @@ class PackManager:
                         "Install one sail design at a time so its vanilla target is unambiguous."
                     )
 
+            selected_crew = None
+            if category == CATEGORY_CREW and crew_target_id and crew_target_id != "auto":
+                selected_crew = get_crew_target(crew_target_id)
+                if selected_crew is None:
+                    raise PackError(f"Unknown vanilla crew target: {crew_target_id}")
+                if len(files) != 1:
+                    raise PackError(
+                        "This crew archive contains multiple texture images. "
+                        "Choose automatic filename detection for a full crew pack, or install "
+                        "one texture at a time when assigning an individual vanilla target."
+                    )
+
             slots: list[PackSlot] = []
             imported = []
             errors: list[str] = []
@@ -554,6 +570,9 @@ class PackManager:
                 if selected_sail is not None:
                     mat, slot, kind = (selected_sail.material_id,
                                        selected_sail.slot, "selected-sail-target")
+                if selected_crew is not None:
+                    mat, slot, kind = (selected_crew.material_id, 0,
+                                       "selected-crew-target")
                 if mat is None and category == CATEGORY_CREW:
                     crew_target = target_for_filename(path.name)
                     if crew_target is not None:
@@ -581,7 +600,7 @@ class PackManager:
                 slots.append(PackSlot(mat, slot, slot_info.tex, slot_info.W,
                                       slot_info.H, slot_info.family, slot_info.srgb))
                 if category == CATEGORY_CREW:
-                    crew_target = target_for_texture(slot_info.tex)
+                    crew_target = selected_crew or target_for_texture(slot_info.tex)
                     if crew_target is not None:
                         replaces.add(crew_target.display_name)
                 elif category == CATEGORY_GENERAL:
@@ -626,6 +645,9 @@ class PackManager:
             if selected_sail is not None:
                 meta["sail_target_id"] = selected_sail.id
                 meta["sail_texture_id"] = f"0x{selected_sail.texture_id:X}"
+            if selected_crew is not None:
+                meta["crew_target_id"] = selected_crew.id
+                meta["crew_texture_id"] = f"0x{selected_crew.texture_id:X}"
             (p_dir / "meta.json").write_text(
                 json.dumps(meta, indent=2) + "\n", encoding="utf-8")
 
@@ -944,21 +966,19 @@ class PackManager:
         }
 
     def apply_staged(self, category: str | None = None) -> dict:
-        """Apply all enabled packs (in load order) for a category, or all.
+        """Rebuild the complete enabled texture set in load order.
 
-        Returns the apply result. Does NOT auto-activate single-packs; the
-        staged "enabled" list is the source of truth.
+        The journal describes the complete patched FORGE state. Reapplying only
+        the category that changed would first restore every other category and
+        then silently omit it. Therefore ``category`` is retained for API
+        compatibility, but every apply rebuilds outfits, weapons, crew, sails,
+        and general textures together. The staged enabled lists remain the
+        source of truth.
         """
-        lib = self._load_library()
-        if category:
-            categories = [category]
-            packs = [self.get_pack(pid) for pid in self._staged(category)]
-        else:
-            categories = []
-            packs = []
-            for cat in PACK_CATEGORIES:
-                packs.extend(self.get_pack(pid) for pid in self._staged(cat))
-            categories = list(PACK_CATEGORIES)
+        categories = list(PACK_CATEGORIES)
+        packs = []
+        for cat in PACK_CATEGORIES:
+            packs.extend(self.get_pack(pid) for pid in self._staged(cat))
         packs = [p for p in packs if p is not None]
         # The journal represents the complete injected set. Always restore it
         # before rebuilding, including when the final pack was just disabled.

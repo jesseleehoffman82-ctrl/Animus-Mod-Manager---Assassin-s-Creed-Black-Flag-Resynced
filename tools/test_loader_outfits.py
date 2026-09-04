@@ -26,6 +26,7 @@ from Animus_loader import outfits  # noqa: E402
 from Animus_loader.forge import ForgeArchive, Oodle  # noqa: E402
 from Animus_loader.texture import parse_dds, plan_texture  # noqa: E402
 from Animus_loader.general_texture_catalog import target_for_general_filename  # noqa: E402
+from Animus_loader.crew_catalog import crew_targets, get_crew_target  # noqa: E402
 from Animus_loader.sail_catalog import (  # noqa: E402
     get_sail_target,
     sail_targets,
@@ -151,6 +152,12 @@ def build_forge():
 
 
 def main() -> int:
+    selectable_crew = crew_targets()
+    assert len(selectable_crew) == 40
+    assert len({target.id for target in selectable_crew}) == len(selectable_crew)
+    standard_torso = get_crew_target("torso-s-jackdawpirates")
+    assert standard_torso is not None
+    assert standard_torso.display_name == "Standard: Torso"
     selectable_sails = sail_targets()
     assert len(selectable_sails) == 45
     assert len({target.id for target in selectable_sails}) == len(selectable_sails)
@@ -390,6 +397,17 @@ def main() -> int:
     pmgr.revert_all()
     assert FORGE.read_bytes() == orig, "forge not restored after staged apply/revert"
     assert pmgr._load_journal() is None
+
+    # Applying after one tab changes must preserve every other enabled texture
+    # category. The journal always represents the complete FORGE patch set.
+    pmgr.set_enabled(a.id, True)
+    pmgr.set_enabled(wep.id, True)
+    combined = pmgr.apply_staged(CATEGORY_OUTFIT)
+    assert set(combined["packs"]) == {a.id, wep.id}
+    pmgr.set_enabled(a.id, False)
+    pmgr.set_enabled(wep.id, False)
+    pmgr.apply_staged(CATEGORY_WEAPON)
+    assert FORGE.read_bytes() == orig
 
     # 10. Per-pack revert: apply ONE pack and revert it cleanly.
     # First clear any leftover enabled packs from earlier sections.

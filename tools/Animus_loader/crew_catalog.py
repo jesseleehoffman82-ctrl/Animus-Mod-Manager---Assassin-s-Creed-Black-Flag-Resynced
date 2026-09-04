@@ -20,6 +20,11 @@ class CrewTarget:
     height: int
 
     @property
+    def id(self) -> str:
+        """Stable UI/storage id derived from the game's resource name."""
+        return re.sub(r"[^a-z0-9]+", "-", self.key.casefold()).strip("-")
+
+    @property
     def set_name(self) -> str:
         rules = (
             ("MrBonesB", "Skeleton Crew (B)"),
@@ -90,6 +95,17 @@ CREW_TARGETS = (
 )
 
 _BY_TEXTURE = {target.texture_id: target for target in CREW_TARGETS}
+_BY_ID = {target.id: target for target in CREW_TARGETS}
+
+
+def crew_targets() -> tuple[CrewTarget, ...]:
+    """Return every independently measured selectable crew texture target."""
+    return CREW_TARGETS
+
+
+def get_crew_target(target_id: str) -> CrewTarget | None:
+    """Resolve a stable crew target id selected by the native interface."""
+    return _BY_ID.get(str(target_id).casefold().strip())
 
 
 def target_for_texture(texture_id: int) -> CrewTarget | None:

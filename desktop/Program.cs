@@ -240,7 +240,7 @@ internal sealed class ConflictPromptForm : Form
     }
 }
 
-internal sealed class SailTargetPromptForm : Form
+internal sealed class ReplacementTargetPromptForm : Form
 {
     private sealed record TargetChoice(string Id, string Name, string Kind)
     {
@@ -257,7 +257,13 @@ internal sealed class SailTargetPromptForm : Form
 
     public string? SelectedTargetId => (targets.SelectedItem as TargetChoice)?.Id;
 
-    public SailTargetPromptForm(JsonArray options, string defaultId)
+    public ReplacementTargetPromptForm(
+        JsonArray options,
+        string defaultId,
+        string heading,
+        string description,
+        string note,
+        string confirmText)
     {
         FormBorderStyle = FormBorderStyle.None;
         HandleCreated += (_, _) => NativeMethods.UseSmallRoundedCorners(Handle);
@@ -283,7 +289,7 @@ internal sealed class SailTargetPromptForm : Form
         };
         header.Controls.Add(new Label
         {
-            Text = "CHOOSE VANILLA SAIL SET",
+            Text = heading,
             ForeColor = GoldBright,
             BackColor = Color.Transparent,
             Font = new Font("Segoe UI Semibold", 10.5f),
@@ -298,7 +304,7 @@ internal sealed class SailTargetPromptForm : Form
 
         Controls.Add(new Label
         {
-            Text = "Select the in-game sail cosmetic this design will replace.",
+            Text = description,
             ForeColor = TextPrimary,
             BackColor = Color.Transparent,
             Font = new Font("Segoe UI", 10f),
@@ -306,7 +312,7 @@ internal sealed class SailTargetPromptForm : Form
         });
         Controls.Add(new Label
         {
-            Text = "Different targets can remain enabled together. The manager warns when two designs share one target.",
+            Text = note,
             ForeColor = Color.FromArgb(168, 166, 160),
             BackColor = Color.Transparent,
             Font = new Font("Segoe UI", 9f),
@@ -345,8 +351,8 @@ internal sealed class SailTargetPromptForm : Form
         var cancel = MakeButton("CANCEL", 105);
         cancel.Bounds = new Rectangle(ClientSize.Width - 292, ClientSize.Height - 61, 105, 36);
         cancel.DialogResult = DialogResult.Cancel;
-        var confirm = MakeButton("USE THIS SAIL SET", 153, true);
-        confirm.Bounds = new Rectangle(ClientSize.Width - 177, ClientSize.Height - 61, 153, 36);
+        var confirm = MakeButton(confirmText, 165, true);
+        confirm.Bounds = new Rectangle(ClientSize.Width - 189, ClientSize.Height - 61, 165, 36);
         confirm.DialogResult = DialogResult.OK;
         AcceptButton = confirm;
         CancelButton = cancel;
@@ -541,17 +547,32 @@ internal sealed class MainForm : Form
                     await PostResponse(id, new JsonObject { ["result"] = null });
                     return;
                 }
-                if (category == "sail")
+                if (category is "sail" or "crew")
                 {
-                    var choicesPayload = await RunPython("get_sail_targets", []);
+                    var isSail = category == "sail";
+                    var choicesPayload = await RunPython(
+                        isSail ? "get_sail_targets" : "get_crew_targets", []);
                     if (choicesPayload["error"] is not null)
                         throw new InvalidOperationException(
-                            choicesPayload["error"]?.GetValue<string>() ?? "Could not load sail targets");
+                            choicesPayload["error"]?.GetValue<string>() ??
+                            $"Could not load {category} targets");
                     var choicesResult = choicesPayload["result"] as JsonObject
-                        ?? throw new InvalidOperationException("The sail target catalogue is unavailable.");
+                        ?? throw new InvalidOperationException(
+                            $"The {category} target catalogue is unavailable.");
                     var choices = choicesResult["targets"] as JsonArray ?? [];
-                    var defaultId = choicesResult["default_id"]?.GetValue<string>() ?? "common";
-                    using var targetPrompt = new SailTargetPromptForm(choices, defaultId);
+                    var defaultId = choicesResult["default_id"]?.GetValue<string>() ??
+                        (isSail ? "common" : "auto");
+                    using var targetPrompt = new ReplacementTargetPromptForm(
+                        choices,
+                        defaultId,
+                        isSail ? "CHOOSE VANILLA SAIL SET" : "CHOOSE VANILLA CREW TARGET",
+                        isSail
+                            ? "Select the in-game sail cosmetic this design will replace."
+                            : "Select the crew texture this design will replace, or use automatic pack detection.",
+                        isSail
+                            ? "Different targets can remain enabled together. Animus warns when two designs share one target."
+                            : "Full packs can detect several named textures. Individual assignments accept one texture at a time.",
+                        isSail ? "USE THIS SAIL SET" : "USE THIS CREW TARGET");
                     if (targetPrompt.ShowDialog(this) != DialogResult.OK ||
                         string.IsNullOrWhiteSpace(targetPrompt.SelectedTargetId))
                     {
@@ -567,7 +588,8 @@ internal sealed class MainForm : Form
                     ["stage"] = "installing"
                 }.ToJsonString());
                 rpcMethod = "install_pack_path";
-                if (category != "sail") rpcArgs = [category, dialog.FileName];
+                if (category is not ("sail" or "crew"))
+                    rpcArgs = [category, dialog.FileName];
             }
             else if (method == "update_item")
             {

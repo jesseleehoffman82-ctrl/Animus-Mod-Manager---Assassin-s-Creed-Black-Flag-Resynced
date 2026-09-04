@@ -153,12 +153,13 @@ function render() {
 function renderTable() {
   const isMods = app.tab === "mods";
   const isOutfits = app.tab === "outfits";
+  const isCrew = app.tab === "crew";
   const isSails = app.tab === "sails";
-  const isVanillaReplacement = isOutfits || isSails;
-  const replacementKind = isSails ? "sail" : "outfit";
+  const isVanillaReplacement = isOutfits || isCrew || isSails;
+  const replacementKind = isSails ? "sail" : isCrew ? "crew texture" : "outfit";
   $("#table-head").innerHTML = isMods
     ? `<tr><th class="col-enabled">ENABLED</th><th>MOD</th><th class="col-version">VERSION</th><th class="col-author">AUTHOR</th><th class="col-targets">TARGETS</th><th class="col-menu"></th></tr>`
-    : `<tr><th class="col-enabled">ENABLED</th><th>${isOutfits ? "OUTFIT MOD" : app.tab === "weapons" ? "WEAPON SKIN" : app.tab === "crew" ? "CREW TEXTURE" : "SAIL DESIGN"}</th><th class="col-author">AUTHOR</th><th class="${isVanillaReplacement ? "col-replaces" : "col-targets"}">${isOutfits ? "REPLACES VANILLA OUTFIT" : isSails ? "REPLACES VANILLA SAIL" : "TEXTURE SLOTS"}</th><th class="col-menu"></th></tr>`;
+    : `<tr><th class="col-enabled">ENABLED</th><th>${isOutfits ? "OUTFIT MOD" : app.tab === "weapons" ? "WEAPON SKIN" : isCrew ? "CREW TEXTURE" : "SAIL DESIGN"}</th><th class="col-author">AUTHOR</th><th class="${isVanillaReplacement ? "col-replaces" : "col-targets"}">${isOutfits ? "REPLACES VANILLA OUTFIT" : isCrew ? "REPLACES VANILLA CREW" : isSails ? "REPLACES VANILLA SAIL" : "TEXTURE SLOTS"}</th><th class="col-menu"></th></tr>`;
 
   const rows = currentRows();
   const replacementOwners = new Map();
