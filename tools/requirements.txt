@@ -2,8 +2,8 @@
 # Install with:  pip install -r requirements.txt
 
 # Required for unpacking .7z pack archives. .zip/.tar use stdlib.
-py7zr>=1.0
+py7zr==1.1.3
 
 # numpy + Pillow are used by the PNG-to-BC outfit texture encoder.
-numpy
-Pillow
+numpy==2.5.1
+Pillow==12.3.0

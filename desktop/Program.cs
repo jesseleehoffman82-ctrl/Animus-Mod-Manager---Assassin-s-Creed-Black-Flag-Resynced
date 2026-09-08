@@ -453,11 +453,18 @@ internal sealed class MainForm : Form
         core.NewWindowRequested += (_, e) =>
         {
             e.Handled = true;
-            Process.Start(new ProcessStartInfo(e.Uri) { UseShellExecute = true });
+            if (Uri.TryCreate(e.Uri, UriKind.Absolute, out var link) &&
+                link.Scheme is "https" or "http")
+            {
+                try { Process.Start(new ProcessStartInfo(link.AbsoluteUri) { UseShellExecute = true }); }
+                catch (Exception ex) { Program.LogFailure("Open external link", ex); }
+            }
         };
         var indexPath = Path.Combine(root, "tools", "Animus_loader", "web", "index.html");
         if (!File.Exists(indexPath))
             throw new FileNotFoundException("The Animus interface could not be found.", indexPath);
+        core.NavigationStarting += (_, e) => e.Cancel = !IsTrustedInterface(e.Uri);
+        core.FrameNavigationStarting += (_, e) => e.Cancel = true;
         core.NavigationCompleted += (_, e) =>
         {
             if (!e.IsSuccess)
@@ -472,6 +479,7 @@ internal sealed class MainForm : Form
 
     private async void OnWebMessage(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
     {
+        if (!IsTrustedInterface(e.Source)) return;
         string id = "";
         try
         {
@@ -542,7 +550,7 @@ internal sealed class MainForm : Form
                 {
                     var isSail = category == "sail";
                     var choicesPayload = await RunPython(
-                        isSail ? "get_sail_targets" : "get_crew_targets", []);
+                        isSail ? "get_sail_targets" : "get_crew_targets", isSail ? [] : [dialog.FileName]);
                     if (choicesPayload["error"] is not null)
                         throw new InvalidOperationException(
                             choicesPayload["error"]?.GetValue<string>() ??
@@ -551,6 +559,7 @@ internal sealed class MainForm : Form
                         ?? throw new InvalidOperationException(
                             $"The {category} target catalogue is unavailable.");
                     var choices = choicesResult["targets"] as JsonArray ?? [];
+                    var fixedMaterial = choicesResult["fixed_material"]?.GetValue<bool>() ?? false;
                     var defaultId = choicesResult["default_id"]?.GetValue<string>() ??
                         (isSail ? "common" : "auto");
                     using var targetPrompt = new ReplacementTargetPromptForm(
@@ -559,9 +568,11 @@ internal sealed class MainForm : Form
                         isSail ? "CHOOSE VANILLA SAIL SET" : "CHOOSE VANILLA CREW TARGET",
                         isSail
                             ? "Select the in-game sail cosmetic this design will replace."
+                            : fixedMaterial ? "This material patch is built for the crew cosmetic shown below."
                             : "Select the crew texture this design will replace, or use automatic pack detection.",
                         isSail
                             ? "Different targets can remain enabled together. Animus warns when two designs share one target."
+                            : fixedMaterial ? "Fixed destination. Existing patch archives are protected; in-game appearance needs testing."
                             : "Full packs can detect several named textures. Individual assignments accept one texture at a time.",
                         isSail ? "USE THIS SAIL SET" : "USE THIS CREW TARGET");
                     if (targetPrompt.ShowDialog(this) != DialogResult.OK ||
@@ -650,6 +661,14 @@ internal sealed class MainForm : Form
         }
     }
 
+    private bool IsTrustedInterface(string source)
+    {
+        if (!Uri.TryCreate(source, UriKind.Absolute, out var uri) || !uri.IsFile || uri.IsUnc)
+            return false;
+        var expected = Path.GetFullPath(Path.Combine(root, "tools", "Animus_loader", "web", "index.html"));
+        return string.Equals(Path.GetFullPath(uri.LocalPath), expected, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static int CountEnabled(JsonObject? state, string key)
     {
         if (state?[key] is not JsonArray rows) return 0;
@@ -731,6 +750,15 @@ internal sealed class MainForm : Form
     }
 
     private async Task<JsonObject> RunPython(string method, JsonArray args)
+    {
+        await backendGate.WaitAsync();
+        try { return await RunPythonExclusive(method, args); }
+        finally { backendGate.Release(); }
+    }
+
+    private readonly SemaphoreSlim backendGate = new(1, 1);
+
+    private async Task<JsonObject> RunPythonExclusive(string method, JsonArray args)
     {
         var bundledPython = Path.Combine(root, "runtime", "python", "python.exe");
         var start = new ProcessStartInfo

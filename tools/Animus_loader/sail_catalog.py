@@ -81,7 +81,12 @@ _BY_ID = {target.id: target for target in _SELECTABLE_TARGETS}
 
 
 def sail_targets() -> tuple[SailTarget, ...]:
-    return _SELECTABLE_TARGETS
+    # Legacy IDs remain resolvable for packs installed with the longer picker.
+    main_ids = (
+        "common", "empty", "red-striped", "blue-white", "dark-green",
+        "orange", "navy-blue", "crimson", "blue-white-checkered", "dark-compass",
+    )
+    return tuple(_BY_ID[target_id] for target_id in main_ids)
 
 
 def get_sail_target(target_id: str) -> SailTarget | None:

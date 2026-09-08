@@ -159,7 +159,9 @@ def main() -> int:
     assert standard_torso is not None
     assert standard_torso.display_name == "Standard: Torso"
     selectable_sails = sail_targets()
-    assert len(selectable_sails) == 45
+    assert len(selectable_sails) == 10
+    assert all(target.kind == "sail-set" for target in selectable_sails)
+    assert get_sail_target("emblem-animus") is not None
     assert len({target.id for target in selectable_sails}) == len(selectable_sails)
     assert get_sail_target("COMMON") == get_sail_target("common")
     assert get_sail_target("common").display_name == "White / Common Sails"

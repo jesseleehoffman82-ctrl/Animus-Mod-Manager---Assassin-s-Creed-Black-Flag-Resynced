@@ -94,7 +94,9 @@ function rowTooltip(row) {
 function currentRows() { return app.state[app.tab] || []; }
 function selectedRow() { return currentRows().find(row => (row.name || row.id) === app.selected); }
 function isTexturePackRow(row) { return row?.managed_type === "texture-pack"; }
+function isFileModRow(row) { return row?.managed_type === "crew-material" || (app.tab === "mods" && !isTexturePackRow(row)); }
 function itemTypeForRow(row) {
+  if (row?.managed_type === "crew-material") return "mod";
   if (isTexturePackRow(row)) return row.pack_category || "general";
   return app.tab === "mods" ? "mod" : packCategory();
 }
@@ -286,7 +288,7 @@ function setTab(tab) {
 async function toggleRow(key) {
   const row = currentRows().find(item => (item.name || item.id) === key);
   if (!row) return;
-  if (app.tab === "mods" && !isTexturePackRow(row)) await call("toggle_mod", row.id || row.name);
+  if (isFileModRow(row)) await call("toggle_mod", row.id || row.name);
   else {
     if (app.packBusy) return;
     const previousEnabled = row.enabled;
@@ -328,7 +330,7 @@ function hideMenu() { $("#context-menu").hidden = true; app.menuTarget = null; }
 
 async function showDetails(name) {
   const row = currentRows().find(item => (item.name || item.id) === name);
-  const data = await call(app.tab === "mods" && !isTexturePackRow(row) ? "get_mod_details" : "get_pack_details", row?.id || name)
+  const data = await call(isFileModRow(row) ? "get_mod_details" : "get_pack_details", row?.id || name)
     || row;
   if (!data) return;
   const targets = Array.isArray(data.targets) ? data.targets : [];
@@ -482,7 +484,7 @@ $("#install-button").onclick = async event => {
 };
 $("#uninstall-button").onclick = async () => {
   if (app.tab !== "mods") {
-    await call("revert_all");
+    await call("revert_all", packCategory());
     app.selected = null;
     await refresh();
     return;
@@ -521,7 +523,7 @@ $("#context-menu").onclick = async event => {
   }
   if (action === "uninstall") {
     const row = currentRows().find(item => (item.name || item.id) === name);
-    if (app.tab === "mods" && !isTexturePackRow(row)) {
+    if (isFileModRow(row)) {
       await call("uninstall_mod", row?.id || name);
     } else {
       if (row) await call("remove_pack", row.id);
@@ -531,7 +533,7 @@ $("#context-menu").onclick = async event => {
   }
   if (action === "open") {
     const row = currentRows().find(item => (item.name || item.id) === name);
-    if (app.tab === "mods" && !isTexturePackRow(row)) {
+    if (isFileModRow(row)) {
       await call("open_mod_folder", row?.id || name);
     }
     else {

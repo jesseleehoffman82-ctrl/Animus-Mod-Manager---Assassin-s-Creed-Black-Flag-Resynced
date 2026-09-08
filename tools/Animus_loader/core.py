@@ -20,7 +20,7 @@ import tempfile
 import time
 import zipfile
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 FORMAT = "jackdaw-mod-v1"
 GAME = "AC4BF-Resynced"
@@ -538,9 +538,14 @@ class Loader:
         name = manifest.get("name") or "Untitled"
         version = manifest.get("version") or "0.0.0"
         author = manifest.get("author") or "unknown"
+        for label, value in (("name", name), ("version", version)):
+            if not isinstance(value, str) or any(c in value for c in '\\/:*?"<>|') or any(ord(c) < 32 for c in value):
+                raise LoaderError(f"Invalid package {label}")
         targets: list[Target] = []
         raw_targets = manifest.get("targets") or []
         for index, target in enumerate(raw_targets, start=1):
+            destination = target.get("dest") if target.get("mode") == "loose-file" else target.get("forge")
+            self._safe_game_path(destination)
             resource_id = target.get("resource_id", "0")
             try:
                 rid = int(resource_id, 0)
@@ -548,6 +553,9 @@ class Loader:
                 raise LoaderError(f"Target {index} has invalid resource_id") from exc
             file = target.get("file", "")
             replacement = archive.read(file) if file else b""
+            expected_hash = target.get("sha256")
+            if expected_hash and hashlib.sha256(replacement).hexdigest() != str(expected_hash).lower():
+                raise LoaderError(f"Target {index} payload checksum mismatch")
             needle_hex = target.get("needle")
             patch_hex = target.get("patch")
             targets.append(
@@ -772,8 +780,21 @@ class Loader:
     # ------------------------------------------------------------------ #
     # apply
     # ------------------------------------------------------------------ #
+    def _safe_game_path(self, value: str) -> Path:
+        if not isinstance(value, str) or not value:
+            raise LoaderError("Missing game-relative target path")
+        windows = PureWindowsPath(value)
+        if windows.drive or windows.root or any(part in {".", ".."} for part in windows.parts) or any(c in value for c in ':*?"<>|') or any(ord(c) < 32 for c in value):
+            raise LoaderError(f"Unsafe target path: {value}")
+        root = self.game_dir.resolve()
+        target = (root / value).resolve()
+        if target == root or root not in target.parents:
+            raise LoaderError(f"Target escapes the game folder: {value}")
+        return target
+
     def _apply_target(self, pkg: Package, target: Target) -> list[dict]:
         """Apply one target; return a backup record entry."""
+        self._safe_game_path(target.dest if target.mode == "loose-file" else target.forge)
         if target.mode == "byte-patch":
             return self._apply_byte_patch(pkg, target)
         if target.mode == "loose-file":
@@ -1111,7 +1132,9 @@ class Loader:
                     return
 
     def _write_backup(self, path: Path, pkg: Package, original: bytes) -> Path:
-        backup_name = f"{path.name}.{pkg.name}.{pkg.version}.bak"
+        relative = path.resolve().relative_to(self.game_dir.resolve()).as_posix().casefold()
+        path_id = hashlib.sha256(relative.encode("utf-8")).hexdigest()[:16]
+        backup_name = f"{path.name}.{path_id}.{pkg.name}.{pkg.version}.bak"
         backup_path = self.backups_dir / backup_name
         backup_path.write_bytes(original)
         return backup_path
@@ -1304,7 +1327,7 @@ class Loader:
         dest = Path(target.dest)
         if dest.is_absolute() or ".." in dest.parts:
             raise LoaderError(f"{pkg.name}: loose-file destination is unsafe: {target.dest}")
-        dest_path = self.game_dir / dest
+        dest_path = self._safe_game_path(target.dest)
         dest_path.parent.mkdir(parents=True, exist_ok=True)
 
         if dest.as_posix().lower() == "version.dll":
@@ -1343,10 +1366,25 @@ class Loader:
         """
         pkg = self.read_package(package_path)
         # Restore any previous state for this package first.
+        from .crew_patch import preflight as crew_preflight
+        crew_preflight(self, pkg)
         self.remove(pkg.name)
         backups: list[dict] = []
-        for target in pkg.targets:
-            backups.append(self._apply_target(pkg, target))
+        try:
+            for target in pkg.targets:
+                backups.append(self._apply_target(pkg, target))
+                if pkg.manifest.get("crew_patch") is not None:
+                    backups[-1]["crew_material_patch"] = True
+        except Exception:
+            # Keep successful writes recoverable if a later target fails.
+            if backups:
+                records = self._load_state()
+                partial = InstallRecord(pkg.name, pkg.version, pkg.author, enabled=True, priority=priority)
+                partial.backups = backups
+                records.append(partial)
+                self._save_state(records)
+                self.remove(pkg.name)
+            raise
         # Record install state.
         records = self._load_state()
         record = InstallRecord(pkg.name, pkg.version, pkg.author, enabled=True, priority=priority)

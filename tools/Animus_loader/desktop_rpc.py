@@ -19,6 +19,7 @@ from .game_launch import game_executable, launch_game as launch_selected_game, s
 from .packs import CATEGORY_CREW, CATEGORY_GENERAL, CATEGORY_OUTFIT, CATEGORY_SAIL, CATEGORY_WEAPON, PackError, PackManager
 from .crew_catalog import crew_targets
 from .sail_catalog import sail_targets
+from . import crew_patch
 
 ROOT = Path(__file__).resolve().parents[2]
 MODS_ROOT = ROOT / "mods"
@@ -102,6 +103,8 @@ class DesktopRpc:
                 })
                 continue
             record = installed.get(package.name)
+            if package.manifest.get("crew_patch") is not None:
+                continue
             compatibility = [
                 str(entry["compatibility"])
                 for entry in (record.backups if record else [])
@@ -165,6 +168,67 @@ class DesktopRpc:
             })
         return result
 
+    def _install_crew_material(self, source: Path, selected=None, old_name=None):
+        import hashlib
+        import tempfile
+        import zipfile
+        with crew_patch.package_source(source) as native:
+            if native is None:
+                raise LoaderError("Select a crew material .jmod or its ZIP wrapper.")
+            package = self.loader.read_package(native)
+            meta = crew_patch.metadata(package)
+            if selected and selected != meta["target_id"]:
+                raise LoaderError("This material patch has a fixed vanilla crew destination.")
+            old_path = self._find_package(old_name or package.name)
+            if old_path:
+                old = self.loader.read_package(old_path)
+                old_meta = crew_patch.metadata(old)
+                if old_meta is None or old_meta["target_id"] != meta["target_id"]:
+                    raise LoaderError("An update must retain the same vanilla crew destination.")
+            # Preserve user renames and publish the package only after a successful
+            # deployment. Failed updates restore both the old bytes and its state.
+            with tempfile.TemporaryDirectory(prefix="animus_crew_install_") as folder:
+                staged = Path(folder) / "crew.jmod"
+                manifest = dict(package.manifest)
+                if old_name:
+                    manifest["name"] = old_name
+                with zipfile.ZipFile(native) as src, zipfile.ZipFile(staged, "w", zipfile.ZIP_DEFLATED) as dst:
+                    for item in src.infolist():
+                        dst.writestr(item, json.dumps(manifest).encode() if item.filename == "manifest.json" else src.read(item))
+                package = self.loader.read_package(staged)
+                crew_patch.preflight(self.loader, package)
+                records = self.loader.list_installed()
+                prior = next((r for r in records if r.name == package.name), None)
+                was_enabled = bool(prior and prior.enabled)
+                previous_state = self.loader.state_path.read_bytes() if self.loader.state_path.exists() else None
+                game_path = self.game_dir / crew_patch.PATCH_FILE
+                previous_game = game_path.read_bytes() if game_path.exists() else None
+                previous_package = old_path.read_bytes() if old_path else None
+                target = old_path or self.loader.packages_dir / ("crew-" + hashlib.sha256(package.name.encode()).hexdigest()[:20] + ".jmod")
+                try:
+                    if old_name is None or was_enabled:
+                        self.loader.apply(staged)
+                    target.write_bytes(staged.read_bytes())
+                    if old_name and not was_enabled and prior:
+                        prior.version, prior.author = package.version, package.author
+                        self.loader._save_state(records)
+                except Exception:
+                    if previous_game is not None:
+                        game_path.write_bytes(previous_game)
+                    elif game_path.exists():
+                        game_path.unlink()
+                    if previous_state is not None:
+                        self.loader.state_path.write_bytes(previous_state)
+                    elif self.loader.state_path.exists():
+                        self.loader.state_path.unlink()
+                    if previous_package is not None:
+                        target.write_bytes(previous_package)
+                    elif target.exists():
+                        target.unlink()
+                    raise
+        self.log(f"{'Updated' if old_name else 'Installed'} '{package.name}' — material patch for {meta['target_name']}. In-game appearance requires testing.", "ok")
+        return {"ok": True, "name": package.name}, self.state()
+
     def state(self) -> dict:
         executable = game_executable(self.game_dir)
         return {
@@ -176,7 +240,7 @@ class DesktopRpc:
             "mods": self.list_mods(),
             "outfits": self.list_packs(CATEGORY_OUTFIT),
             "weapons": self.list_packs(CATEGORY_WEAPON),
-            "crew": self.list_packs(CATEGORY_CREW),
+            "crew": self.list_packs(CATEGORY_CREW) + crew_patch.rows(self.loader),
             "sails": self.list_packs(CATEGORY_SAIL),
             "proxy_status": self.loader.proxy_status(),
         }
@@ -203,6 +267,15 @@ class DesktopRpc:
             }, None
 
         if method == "get_crew_targets":
+            if args:
+                with crew_patch.package_source(Path(args[0])) as source:
+                    if source is not None:
+                        package = self.loader.read_package(source)
+                        meta = crew_patch.metadata(package)
+                        return {"targets": [{"id": meta["target_id"],
+                                              "name": meta["target_name"] + " (fixed material patch)",
+                                              "kind": "crew-material"}],
+                                "default_id": meta["target_id"], "fixed_material": True}, None
             return {
                 "targets": [
                     {
@@ -255,6 +328,7 @@ class DesktopRpc:
             return {
                 "ok": True, "name": package.name, "version": package.version,
                 "author": package.author, "category": package.category,
+                "replaces": [package.manifest["crew_patch"]["target_name"]] if package.manifest.get("crew_patch") else [],
                 "description": package.manifest.get("description", ""),
                 "path": str(path),
                 "dll_compatibility": compatibility[-1] if compatibility else None,
@@ -294,6 +368,9 @@ class DesktopRpc:
 
         if method == "install_mod_path":
             source = Path(args[0])
+            with crew_patch.package_source(source) as native:
+                if native is not None:
+                    return self._install_crew_material(native)
             try:
                 target, package, converted = self.loader.import_package(source)
             except LoaderError as mod_error:
@@ -360,16 +437,38 @@ class DesktopRpc:
 
         if method in {"uninstall_mod", "remove_mod_files"}:
             name = str(args[0])
-            restored = self.loader.remove(name)
-            path = self._find_package(name)
-            if path and path.is_file():
-                path.unlink()
-            self.log(f"Removed '{name}'; restored {len(restored)} file(s)", "ok")
+            import uuid
+            # One logical mod can have several imported copies/versions. Leaving
+            # even one discoverable makes an uninstall reappear as a disabled row.
+            paths = []
+            for path in self.loader.discover_packages():
+                try:
+                    if self.loader.read_package(path).name == name:
+                        paths.append(path)
+                except LoaderError:
+                    continue
+            recovery = self.loader.mods_root / "removed-packages" / uuid.uuid4().hex
+            moved = []
+            try:
+                if paths:
+                    recovery.mkdir(parents=True)
+                for path in paths:
+                    destination = recovery / path.name
+                    path.rename(destination)
+                    moved.append((path, destination))
+                restored = self.loader.remove(name)
+            except Exception:
+                for original, saved in reversed(moved):
+                    saved.rename(original)
+                raise
+            self.log(f"Uninstalled '{name}'; restored {len(restored)} file(s) and removed {len(moved)} package copy/copies from the library. Archives retained in recovery storage.", "ok")
             return {"ok": True}, self.state()
 
         if method == "update_mod_path":
             old_name, source = str(args[0]), Path(args[1])
             old_path = self._find_package(old_name)
+            if old_path and self.loader.read_package(old_path).manifest.get("crew_patch"):
+                return self._install_crew_material(source, old_name=old_name)
             target, package, converted = self.loader.import_package(source)
             restored = self.loader.remove(old_name)
             if old_path and old_path.is_file() and old_path.resolve() != target.resolve():
@@ -409,7 +508,12 @@ class DesktopRpc:
             if executable is None:
                 raise LoaderError(f"Game executable not found in: {self.game_dir}")
             launch_method = launch_selected_game(self.game_dir)
-            suffix = " through Steam (controller-safe)." if launch_method == "steam" else "."
+            if launch_method == "steam":
+                suffix = " through Steam (controller-safe)."
+            elif launch_method == "already-running":
+                suffix = "; the game is already running."
+            else:
+                suffix = "."
             build = steam_build_id(self.game_dir)
             build_text = f" build {build}" if build else ""
             self.log(
@@ -419,6 +523,10 @@ class DesktopRpc:
 
         if method == "install_pack_path":
             category, path = str(args[0]), Path(args[1])
+            if category == CATEGORY_CREW:
+                with crew_patch.package_source(path) as material_source:
+                    if material_source is not None:
+                        return self._install_crew_material(material_source, selected=str(args[2]) if len(args) > 2 else None)
             sail_target_id = str(args[2]) if category == CATEGORY_SAIL and len(args) > 2 else None
             crew_target_id = str(args[2]) if category == CATEGORY_CREW and len(args) > 2 else None
             pack = self.manager.import_pack(
@@ -541,6 +649,7 @@ class DesktopRpc:
                         "category": category,
                         "conflicts": conflicts,
                     }, None
+            self.manager.revert_all(validate_only=True)
             self.manager.set_enabled(pack_id, enabled)
             result = self.manager.apply_staged()
             self.log(f"{'Enabled' if enabled else 'Disabled'} '{pack.name if pack else pack_id}' and applied changes.", "ok")
@@ -585,6 +694,11 @@ class DesktopRpc:
             return {"ok": True}, None
 
         if method == "revert_all":
+            if not args or str(args[0]) == CATEGORY_CREW:
+                for row in crew_patch.rows(self.loader):
+                    if row["enabled"]:
+                        self.loader.disable(row["name"])
+                        self.log(f"Restored {row['replaces'][0]} by disabling '{row['name']}'.", "ok")
             result = self.manager.revert_all()
             self.log(f"Reverted {result['reverted']} write(s) to vanilla.", "ok")
             return {"ok": True}, self.state()

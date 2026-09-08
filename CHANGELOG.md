@@ -2,6 +2,9 @@
 
 ## 0.1.7 Beta — 2026-09-03
 
+- Revalidated executable detection, all ten selectable sail materials, all
+  forty crew materials, and the Oodle codec against Resynced Title Update 1.0.7
+  (Steam build 24833802).
 - Added an Animus-styled sail-target picker during sail installation so users
   can choose which vanilla sail cosmetic a custom design replaces.
 - Added 45 game-validated sail targets from the current Title Update 1.0.7

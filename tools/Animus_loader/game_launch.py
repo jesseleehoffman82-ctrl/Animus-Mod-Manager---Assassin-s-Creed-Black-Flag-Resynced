@@ -6,6 +6,40 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import time
+
+
+def game_process_running(executable_name: str = "ACBlackFlag.exe") -> bool:
+    """Return whether the game process is currently alive on Windows."""
+    if os.name != "nt":
+        return False
+    result = subprocess.run(
+        ["tasklist", "/FI", f"IMAGENAME eq {executable_name}", "/FO", "CSV", "/NH"],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        encoding="utf-8",
+        errors="ignore",
+        check=False,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    )
+    return executable_name.casefold() in result.stdout.casefold()
+
+
+def wait_for_game_start(executable_name: str, timeout: float = 12.0) -> bool:
+    """Wait for the game to appear and remain alive long enough to be usable."""
+    deadline = time.monotonic() + timeout
+    first_seen: float | None = None
+    while time.monotonic() < deadline:
+        if game_process_running(executable_name):
+            first_seen = first_seen or time.monotonic()
+            if time.monotonic() - first_seen >= 2.0:
+                return True
+        else:
+            first_seen = None
+        time.sleep(0.4)
+    return False
 
 
 def game_executable(game_dir: Path) -> Path | None:
@@ -80,6 +114,8 @@ def launch_game(game_dir: Path) -> str:
     executable = game_executable(game_dir)
     if executable is None:
         raise FileNotFoundError(f"Game executable not found in: {game_dir}")
+    if game_process_running(executable.name):
+        return "already-running"
 
     app_id = steam_app_id(game_dir)
     steam = steam_executable(game_dir) if app_id else None
@@ -92,10 +128,20 @@ def launch_game(game_dir: Path) -> str:
             stderr=subprocess.DEVNULL,
             close_fds=True,
         )
+        if not wait_for_game_start(executable.name):
+            raise RuntimeError(
+                "Black Flag exited during startup. A DLL/ASI mod may be incompatible "
+                "with the current Resynced game build; disable recently updated code mods and try again."
+            )
         return "steam"
 
     if app_id and os.name == "nt":
         os.startfile(f"steam://run/{app_id}")  # type: ignore[attr-defined]
+        if not wait_for_game_start(executable.name):
+            raise RuntimeError(
+                "Black Flag exited during startup. A DLL/ASI mod may be incompatible "
+                "with the current Resynced game build; disable recently updated code mods and try again."
+            )
         return "steam"
 
     subprocess.Popen(

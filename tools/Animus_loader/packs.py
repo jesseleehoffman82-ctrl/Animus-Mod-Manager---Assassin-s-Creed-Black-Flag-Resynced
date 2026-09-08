@@ -732,6 +732,7 @@ class PackManager:
         conflicts = self.enabled_conflicts(pack)
         if conflicts and not disable_conflicts:
             return {"pack": pack, "conflicts": conflicts, "requires_confirmation": True}
+        self.revert_all(validate_only=True)
         for conflict in conflicts:
             self.set_enabled(conflict["id"], False)
         self.set_enabled(pack.id, True)
@@ -988,7 +989,7 @@ class PackManager:
         by_id = {p.id: p for p in packs}
         return self._apply_plans(packs, categories, by_id)
 
-    def revert_all(self) -> dict:
+    def revert_all(self, validate_only: bool = False) -> dict:
         """Revert the currently-injected set back to vanilla.
 
         A Ubisoft title update can replace/repack ``DataPC_boot.forge`` while
@@ -1047,6 +1048,9 @@ class PackManager:
 
         if issues:
             raise PackError("Cannot revert safely:\n" + "\n".join(issues))
+
+        if validate_only:
+            return {"reverted": 0, "issues": [], "packs": journal.packs}
 
         # Write reversals.
         restored = 0
@@ -1179,6 +1183,9 @@ class PackManager:
         if pack is None:
             raise PackError(f"Unknown pack id: {pack_id}")
 
+        # Refuse an unsafe restoration BEFORE changing the enabled checkbox.
+        # A failed uninstall must not silently become a disable operation.
+        self.revert_all(validate_only=True)
         self.set_enabled(pack_id, False)
         applied = self.apply_staged()
 

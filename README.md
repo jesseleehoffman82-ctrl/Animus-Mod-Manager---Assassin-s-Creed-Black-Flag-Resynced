@@ -17,6 +17,11 @@ application with reversible deployment and clear conflict information.
 Download the current portable package from the
 [0.1.7 Beta release](https://github.com/jesseleehoffman82-ctrl/Animus-Mod-Manager---Assassin-s-Creed-Black-Flag-Resynced/releases/tag/v0.1.7-beta).
 
+The release was refreshed on **8 September 2026** with the matching application
+and source packages built on 7 September for **Resynced Title Update 1.0.7**.
+See [RELEASE-IDENTITY.md](RELEASE-IDENTITY.md) for exact filenames and SHA-256
+checksums. Earlier downloads also labelled 0.1.7 can contain different builds.
+
 1. Install the Microsoft **.NET 10 Desktop Runtime x64**.
 2. Download the `win-x64.zip` release asset.
 3. Extract the complete ZIP to a normal folder. Do not run it from inside the
@@ -72,12 +77,27 @@ The Crew table shows exactly which vanilla crew texture is replaced. Packs
 sharing a target are identified even while disabled, and enabling a conflict
 opens the same confirmation workflow used for outfits and sails.
 
+Crew also accepts **fixed-target material-patch `.jmod` packages**, either
+directly or inside one ZIP wrapper. These can recolour shader/material colours
+that are not supplied as ordinary texture images. The picker displays the
+cosmetic named by the package (for example, Rugged Rags); it cannot redirect a
+prebuilt patch to a different cosmetic. The Crew table and context menu support
+enable/disable, updates, rename, details and uninstall for these packages.
+
+Material packages must include source-resource hash checks. Animus refuses
+incompatible source resources, an unknown existing patch archive, or another
+enabled mod occupying that archive. Disable the conflicting mod first; complete
+FORGE archives are not merged. The experimental Rugged Rags recolour still needs
+an in-game appearance and cosmetic-isolation test. No recolour is bundled with
+the public manager.
+
 ### Sails
 
 Installs custom Jackdaw sail designs without depending on a separate sail
 installation utility. Animus asks which vanilla sail cosmetic the design should
-replace and offers 45 targets validated against the current Title Update 1.0.7
-archive.
+replace and offers ten base cosmetic textures. All ten targets were read and
+validated against the current Title Update 1.0.7 archive. Previously
+installed assignments outside this short list remain recognized.
 
 Multiple sail designs can be installed and enabled together when they target
 different vanilla sail sets. If a new design uses an occupied target, Animus

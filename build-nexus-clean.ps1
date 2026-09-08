@@ -75,6 +75,8 @@ Copy-Item -LiteralPath (Join-Path $projectRoot "NEXUS-PORTABLE-README.md") `
     -Destination (Join-Path $clean "README.md")
 Copy-Item -LiteralPath (Join-Path $projectRoot "SOURCE-CODE.txt") `
     -Destination (Join-Path $clean "SOURCE-CODE.txt")
+Copy-Item -LiteralPath (Join-Path $projectRoot "REVIEW-NOTES.md") -Destination $clean
+Copy-Item -LiteralPath (Join-Path $projectRoot "GAME-COMPATIBILITY.md") -Destination $clean
 
 $allowedExecutables = @(
     "AnimusModManager.exe",

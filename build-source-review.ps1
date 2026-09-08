@@ -57,6 +57,17 @@ Get-ChildItem -LiteralPath (Join-Path $projectRoot "tools") -File -Filter "test_
 
 foreach ($document in @(
     "CHANGELOG.md",
+    "build-public-beta.ps1",
+    "build-nexus-clean.ps1",
+    "build-source-review.ps1",
+    "sign-release.ps1",
+    "SOURCE-CODE.txt",
+    "REVIEW-NOTES.md",
+    "GAME-COMPATIBILITY.md",
+    "PUBLIC-BETA-README.md",
+    "NEXUS-PORTABLE-README.md",
+    "NEXUS-SECURITY-NOTES.txt",
+    "SOURCE-BUILD.md",
     "DEVELOPMENT-NOTES.txt",
     "THIRD-PARTY-NOTICES.md",
     "NEXUS-PAGE-DESCRIPTION.md"
@@ -71,7 +82,7 @@ $blocked = @(
     Get-ChildItem -LiteralPath $stage -File -Recurse -Force |
         Where-Object { $_.Extension.ToLowerInvariant() -in @(
             ".exe", ".dll", ".pyd", ".pyc", ".zip", ".7z", ".rar", ".tar", ".gz",
-            ".bat", ".cmd", ".ps1", ".vbs", ".hta"
+            ".bat", ".cmd", ".vbs", ".hta"
         ) }
 )
 if ($blocked.Count) {

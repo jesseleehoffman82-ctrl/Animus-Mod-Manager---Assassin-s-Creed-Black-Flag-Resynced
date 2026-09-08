@@ -146,24 +146,27 @@ def _find_embedded(res: bytes, data_start: int, data_end: int, tol: int = 64):
     return best
 
 
-def _layout(W: int, block: int, first_level: int, length: int):
+def _layout(W: int, H: int, block: int, first_level: int, length: int):
     """Compute the embedded mip layout: [(lvl, rel_off, pitch, rows, rowbytes)]."""
     out = []
     off = 0
     w = max(1, W >> first_level)
+    h = max(1, H >> first_level)
     lvl = first_level
     while w >= 1:
         bw = max(1, (w + 3) // 4)
+        bh = max(1, (h + 3) // 4)
         rowbytes = bw * block
         pitch = _align(rowbytes, 256)
-        n = pitch * bw
+        n = pitch * bh
         if off + n > length:
             break
-        out.append((lvl, off, pitch, bw, rowbytes))
+        out.append((lvl, off, pitch, bh, rowbytes))
         off += n
-        if w == 1:
+        if w == 1 and h == 1:
             break
-        w //= 2
+        w = max(1, w // 2)
+        h = max(1, h // 2)
         lvl += 1
     return out, off
 
@@ -254,7 +257,7 @@ def plan_texture(archive: ForgeArchive, mat: int, slot: int, dds: bytes,
     if c:
         marker_off, pixel_start, length = c
         first_level = len(external)
-        layout, used = _layout(slot_info.W, slot_info.block, first_level, length)
+        layout, used = _layout(slot_info.W, slot_info.H, slot_info.block, first_level, length)
         embedded = EmbeddedTail(pixel_start, length, first_level, layout, used)
 
     return PlanItem(filename, mat, slot, slot_info.tex, slot_info, mips,
