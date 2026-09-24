@@ -12,7 +12,7 @@ The aim is to make ship customization approachable through a 3D workspace where 
 
 ![Early Jackdaw Drydock Studio prototype showing custom sails and hull in the 3D viewer](screenshots/drydock-prototype.jpg)
 
-Early prototype during local texture testing, showing custom sails and hull with viewer settings open. This demonstrates the preview; game installation remains unfinished.
+The screenshot shows the actual Jackdaw model extracted locally from the game by Astra and reassembled in Blender to match the in-game ship. Drydock Studio loads that reconstructed model for customization; the edited hull and sail textures shown here are applied to it in the app. This is a working development preview, not a mock-up. Material and texture accuracy is still being refined, and the complete workflow for installing those customizations back into the game remains unfinished.
 
 ## Current prototype
 
