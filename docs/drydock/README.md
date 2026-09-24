@@ -8,6 +8,12 @@ Jackdaw Drydock Studio is a companion project to [Animus Mod & Outfit Manager](.
 
 The aim is to make ship customization approachable through a 3D workspace where people can inspect the Jackdaw, select surfaces, edit textures, and see their changes on the model.
 
+## Development screenshot
+
+![Early Jackdaw Drydock Studio prototype showing custom sails and hull in the 3D viewer](screenshots/drydock-prototype.jpg)
+
+The screenshot shows the actual Jackdaw model extracted locally from the game and rebuilt in the app, being customized with edited hull and sail textures. This is a working development preview, not a mock-up. The complete workflow for installing those customizations back into the game remains unfinished.
+
 ## Current prototype
 
 Development builds have demonstrated:

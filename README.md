@@ -33,6 +33,27 @@ Animus keeps its managed library, deployment state, and recovery information
 inside its own application folder. Installing a newer numbered release over an
 existing installation preserves that data.
 
+## Screenshots
+
+Animus Mod & Outfit Manager **0.1.7 Beta**, captured during local testing.
+The third-party mods shown are examples and are not bundled with the manager.
+
+**Mods — installed items and enabled status.**
+
+![Mods — installed items and enabled status.](docs/screenshots/animus-mods.jpg)
+
+**Outfits — confirmation when an installation shares an occupied vanilla outfit slot.**
+
+![Outfits — confirmation when an installation shares an occupied vanilla outfit slot.](docs/screenshots/animus-outfit-conflict.jpg)
+
+**Crew — a custom crew texture pack and its vanilla replacement.**
+
+![Crew — a custom crew texture pack and its vanilla replacement.](docs/screenshots/animus-crew.jpg)
+
+**Sails — an imported sail design assigned to Red Striped Sails.**
+
+![Sails — an imported sail design assigned to Red Striped Sails.](docs/screenshots/animus-sails.jpg)
+
 ## What each tab manages
 
 ### Mods
