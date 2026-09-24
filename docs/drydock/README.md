@@ -2,6 +2,8 @@
 
 **Early development prototype · Status: 24 September 2026**
 
+[Browse the GPL-3.0 prototype source](../../drydock-studio/) · [Build status and source checks](../../drydock-studio/BUILDING.md)
+
 Jackdaw Drydock Studio is a companion project to [Animus Mod & Outfit Manager](../../README.md), developed by Jesse Hoffman for the Assassin's Creed Black Flag Resynced modding community.
 
 The aim is to make ship customization approachable through a 3D workspace where people can inspect the Jackdaw, select surfaces, edit textures, and see their changes on the model.
@@ -38,7 +40,7 @@ Additional customization ideas include decals, hull and figurehead variants, and
 
 Animus Mod & Outfit Manager is the separately published manager in this repository. Drydock is an early companion project and must not be confused with the manager's released capabilities.
 
-For project applications and reviews, this page documents Drydock's scope and development status. It is a documentation-only overview, not a publication of Drydock's source code or a claim that Drydock is currently an open-source release.
+For project applications and reviews, this page documents Drydock's scope and development status. The authored prototype source is now published under GPL-3.0-only in the drydock-studio directory. It is an unfinished source snapshot with missing runtime dependencies and generated assets, not a ready-to-run public application.
 
 ## Assets and distribution
 

@@ -1,0 +1,36 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Jackdaw high-detail preview</title>
+<script type="importmap">{"imports":{"three":"./vendor/three/three.module.js"}}</script>
+<style>
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 57% 48%,#416c83 0%,#203e56 48%,#091727 100%);color:#e0e9e9;font:13px Segoe UI,sans-serif;overflow:hidden}canvas{display:block;width:100vw;height:100vh;touch-action:none}button,select{background:#132e3b;color:#e0e9e9;border:1px solid #40606a;border-radius:5px;padding:7px;cursor:pointer}button:hover{border-color:#d8ac65}#tools{position:absolute;top:12px;left:12px;display:flex;gap:6px}#settings{position:absolute;right:12px;top:12px;width:215px;background:#091c26f2;border:1px solid #3a535a;border-radius:8px;padding:14px;max-height:calc(100vh - 24px);overflow:auto}summary{cursor:pointer;color:#8fd8ff;font-weight:600}label{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:12px}select{max-width:125px}input[type=range]{width:110px}#selection{position:absolute;bottom:35px;left:12px;max-width:520px;background:#091c26e8;padding:12px;border-radius:6px}#selection:empty{display:none}#status{position:absolute;bottom:10px;left:12px;color:#c1ced1;pointer-events:none}#error{position:absolute;inset:25%;background:#182934;padding:20px;display:none}small{color:#a0b5bc}#restore{margin-top:8px}#detail{word-break:break-word;max-width:480px}
+.embedded{background:radial-gradient(ellipse at 57% 48%,#254959 0%,#122b3a 52%,#06111c 100%)}.embedded #selection,.embedded #textures{display:none}.embedded #settings:not([open]){width:auto;padding:8px}.embedded #selection{display:none}
+#selection input[type=file]{display:block;margin:12px 0;max-width:100%}#selection input::file-selector-button{background:#132e3b;color:#e0e9e9;border:1px solid #40606a;border-radius:5px;padding:7px;cursor:pointer;margin-right:8px}#selection button{margin:10px 6px 8px 0}#selection details{margin-top:6px}#selection input[type=color]{width:44px;height:28px;border:1px solid #40606a;background:#132e3b;padding:2px}#selection p{color:#a0b5bc;line-height:1.45}</style></head><body>
+<style>
+ #model-loader{position:fixed;inset:0;z-index:40;display:grid;place-items:center;pointer-events:none;background:#08192555}
+ #model-loader[hidden]{display:none}.model-loading-card{width:260px;text-align:center;padding:26px 24px;background:#0c222eee;border:1px solid #416572;border-radius:14px;box-shadow:0 12px 42px #0005}
+ .model-loading-ring{width:38px;height:38px;margin:0 auto 16px;border:2px solid #31505e;border-top-color:#7ee2e9;border-radius:50%;animation:model-spin 1s linear infinite}
+ .model-loading-card strong{display:block;font-size:15px;letter-spacing:.3px}.model-loading-card p{color:#aec5ce;font-size:12px;min-height:17px}
+ #model-progress{width:100%;height:5px;accent-color:#67cfd5}#model-percent{display:block;font-size:11px;color:#9fc3d0;margin-top:9px}
+ @keyframes model-spin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.model-loading-ring{animation:none}}
+ </style>
+ <div id="model-loader" role="status" aria-live="polite"><div class="model-loading-card"><div class="model-loading-ring" aria-hidden="true"></div><strong>Loading Jackdaw</strong><p id="model-stage">Preparing your preview…</p><progress id="model-progress" aria-label="Model loading progress" max="100"></progress><span id="model-percent">Please wait</span></div></div>
+ <canvas id="canvas" aria-label="Interactive Jackdaw model"></canvas>
+<div id="tools"><button id="fit">Fit ship</button><button id="deck">Deck</button><button id="side">Side</button><button id="textures">Textures: On</button></div>
+<details id="settings"><summary>Viewer settings</summary>
+<label>Quality<select id="quality"><option>Low</option><option>Medium</option><option selected>High</option><option disabled>Custom</option></select></label>
+<label>Sail movement<input id="sailMotion" type="checkbox" checked></label>
+<label>Lantern lights<input id="lanterns" type="checkbox"></label>
+<label>Normal detail<input id="normals" type="checkbox" checked></label>
+<label>Shadows<input id="shadows" type="checkbox" checked></label><label>Ambient occlusion<input id="occlusion" type="checkbox" checked></label>
+<label>Shadow resolution<select id="shadowResolution"><option value="1024">1024</option><option value="2048" selected>2048</option><option value="4096">4096</option></select></label>
+<label>Occlusion strength<input id="aoStrength" type="range" min="0" max="1.5" step="0.05" value="0.65"></label>
+<label>Occlusion radius<input id="aoRadius" type="range" min="1" max="12" step="0.5" value="6"></label>
+<label>Anti-aliasing<select id="aaMethod"><option>Off</option><option>FXAA</option><option selected>MSAA</option><option value="TAA">Temporal (still view)</option></select></label>
+<label>MSAA samples<select id="aa"><option value="0">Off</option><option value="2">2Ã— MSAA</option><option value="4" selected>4Ã— MSAA</option></select></label>
+<label>Lighting<select id="lighting"><option>Daylight</option><option>Studio</option><option>Overcast</option></select></label>
+<label>Brightness<input id="exposure" type="range" min="0.5" max="2" step="0.05" value="1.15"></label>
+<label>Wireframe<input id="wireframe" type="checkbox"></label>
+<label>Fade other parts<input id="focusFade" type="checkbox" checked></label>
+<button id="reset" style="margin-top:14px">Reset settings</button>
+<p><small>Temporal mode refines a stationary view and resets during movement. It is not Ubisoft's TAA or DLSS.</small></p></details>
+<div id="selection"></div><div id="status">Loading the textured Jackdawâ€¦</div><div id="error" role="alert"></div>
+<script type="module" src="./embedded-scene.js?v=workflow-depth-1"></script></body></html>

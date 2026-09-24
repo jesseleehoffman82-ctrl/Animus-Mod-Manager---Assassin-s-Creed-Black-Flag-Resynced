@@ -1,0 +1,11 @@
+{
+  "game_version": "1.0.7",
+  "game_version_source": "user-confirmed",
+  "exe_bytes": 469524824,
+  "exe_sha256": "614dab4a20a5d5c6256792e1daa6d05669c97a751079b10df1725d6965ad766d",
+  "toolkit_version": "1.3.7",
+  "builder_revision": "anvil-107-experimental-1",
+  "slot_verified": false,
+  "texture_routing_verified": false,
+  "notes": "Patch scaffold round-trip verified offline. Hull inventory candidate built from the current patch. No in-game installation or equip/persistence validation performed. Old runtime offsets remain unsupported."
+}
