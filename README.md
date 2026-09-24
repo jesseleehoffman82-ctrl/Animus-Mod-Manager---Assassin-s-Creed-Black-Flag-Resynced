@@ -162,6 +162,23 @@ are intentionally excluded from the source-only review archive.
 Development was human-directed and AI-assisted. Additional details are recorded
 in [DEVELOPMENT-NOTES.txt](DEVELOPMENT-NOTES.txt).
 
+## License
+
+Copyright (C) 2026 Jesse Hoffman.
+
+The original Animus Mod & Outfit Manager source code in this repository is
+licensed under the **GNU General Public License, version 3 only**
+(`GPL-3.0-only`). You may redistribute and modify it under those terms.
+See [LICENSE](LICENSE) for the full license. The software is provided without
+warranty, to the extent permitted by law.
+
+Third-party code, runtimes, SDKs, and utilities retain their own licenses;
+see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). This grant does not
+relicense third-party game assets, names, logos, or imagery.
+
+Jackdaw Drydock Studio's development overview does not publish or license
+its unpublished application source code.
+
 ## Feedback
 
 Please report successful installations as well as failures, game-build
