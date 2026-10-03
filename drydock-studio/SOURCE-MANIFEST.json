@@ -1,0 +1,222 @@
+{
+  "snapshot_date": "2026-09-24",
+  "scope": "Authored prototype text source only; no game payloads or third-party distributions",
+  "files": [
+    {
+      "path": "app/EmbeddedScene.ps1",
+      "bytes": 13042,
+      "sha256": "5c63c9c65b23222335fb5f48cf687b2b404ea0b06c1f60a7668ef305d75557f8",
+      "personal_path_replacements": 0
+    },
+    {
+      "path": "app/FastModelReader.ps1",
+      "bytes": 1233,
+      "sha256": "7abbde626569ecd746c7fb879c7afd5849b3f18849a06b82af5edc5559c587a1",
+      "personal_path_replacements": 0
+    },
+    {
+      "path": "app/GenerationDrawer.ps1",
+      "bytes": 1143,
+      "sha256": "68a15ea705d05416cc2a90ead590ce8a6633dfaa4b57622ec76e9dcdc6678702",
+      "personal_path_replacements": 0
+    },
+    {
+      "path": "app/HighDetailViewer.ps1",
+      "bytes": 11366,
+      "sha256": "6ca2c5176cd4883de9ebc1575ec7940f6bc15e75be2db4a466b131ce9727be21",
+      "personal_path_replacements": 0
+    },
+    {
+      "path": "app/JackdawWorkshop3D.ps1",
+      "bytes": 194977,
+      "sha256": "cf1391516789d864caf68c91589ac126fb1bdb9c1be56ebf5e607d0b5f80b15d",
+      "personal_path_replacements": 3
+    },
+    {
+      "path": "app/NativeDesignWorkflow.ps1",
+      "bytes": 17682,
+      "sha256": "3b55ed51e510418a707cd01e9bed88b207b2063b123282af08cbe48df9020d2f",
+      "personal_path_replacements": 0
+    },
+    {
+      "path": "app/NativeFinishCore.ps1",
+      "bytes": 9476,
+      "sha256": "49a2c0cc0868aee9157376ebef8131cd95735acd7c0bbe43b7f71c3b51b571ec",
+      "personal_path_replacements": 0
+    },
+    {
+      "path": "app/NativeFinishEditor.ps1",
+      "bytes": 17529,
+      "sha256": "660fa90c19a67cb4bd1ecc38b2607734cd6c199239ef20ab058a79eb37b2570a",
+      "personal_path_replacements": 0
+    },
+    {
+      "path": "app/NativeInstallWorkflow.ps1",
+      "bytes": 2327,
+      "sha256": "9aa982b7f2afa366cd6d3acebf9bc4aa442a953440777a1e1e0ef6b919fd9894",
+      "personal_path_replacements": 0
+    },
+    {
+      "path": "app/NativeMetalShading.ps1",
+      "bytes": 6497,
+      "sha256": "e1a882c56b2dd05a79aa59b04b731c2020d7057a6dde7019c98c4452f7814695",
+      "personal_path_replacements": 0
+    },
+    {
+      "path": "app/NativeSilhouette.ps1",
+      "bytes": 9184,
+      "sha256": "2c12dd00a5565cd039dad352df66461c42ec8c970e9925bd975dbc59290e0ec1",
+      "personal_path_replacements": 0
+    },
+    {
+      "path": "app/StudioViewer.ps1",
+      "bytes": 12272,
+      "sha256": "a777db7f7861e1ee378ccd869a72c18a4e1a03bfc9c174e7dd1bdf13b116c820",
+      "personal_path_replacements": 0
+    },
+    {
+      "path": "app/studio_viewer_host.py",
+      "bytes": 3207,
+      "sha256": "c9b98592be54a2aea81ad391a7ac275a0b9aafe8c5a67eb9d18f7710a91c3416",
+      "personal_path_replacements": 0
+    },
+    {
+      "path": "app/studio-bridge.js",
+      "bytes": 15621,
+      "sha256": "985817bee0b42dee92fb930e7875449c4a57e4b2ea18601c677fbd58e0bc1c35",
+      "personal_path_replacements": 0
+    },
+    {
+      "path": "app/studio-overlay.html",
+      "bytes": 3994,
+      "sha256": "30117c79b51c9de676d03b39d2674c88a94966a512d6462b59c462377c0c2433",
+      "personal_path_replacements": 0
+    },
+    {
+      "path": "app/window_layout.xaml",
+      "bytes": 59673,
+      "sha256": "8a505d3a40e3157fb4e13ecc41aee1d8aef1a6129ab51f7e137a6f6671f46c55",
+      "personal_path_replacements": 0
+    },
+    {
+      "path": "app/Start Jackdaw Workshop.bat",
+      "bytes": 140,
+      "sha256": "3f65e2b5325458fc91558a90ba9caa79cf58d83e9b77bac6c7a0a93067dd2191",
+      "personal_path_replacements": 0
+    },
+    {
+      "path": "app/high-detail-viewer/embedded-scene.js",
+      "bytes": 22968,
+      "sha256": "3739364b249b9963af01f8c206ef00b929bb40496b229921b41e00b368e8b069",
+      "personal_path_replacements": 0
+    },
+    {
+      "path": "app/high-detail-viewer/finish-editor.js",
+      "bytes": 2926,
+      "sha256": "9e237389ecd75c2fb946325e94372c8dc96fd825d3ce019b0fcbb95052f28d90",
+      "personal_path_replacements": 0
+    },
+    {
+      "path": "app/high-detail-viewer/index.html",
+      "bytes": 5852,
+      "sha256": "2c3f98b971c02089d31b3b8f98acb13fa46ee0de6dc80931795b0d3f93b4969c",
+      "personal_path_replacements": 0
+    },
+    {
+      "path": "app/high-detail-viewer/lantern-lights.js",
+      "bytes": 1250,
+      "sha256": "feba208d42e3040a0a0c46c8d2d0e545eb96980ebbf91fce88b1f31e26469f7c",
+      "personal_path_replacements": 0
+    },
+    {
+      "path": "app/high-detail-viewer/paint-boundaries.js",
+      "bytes": 3704,
+      "sha256": "66c3c07064b36cf96e57700f341c9c0009f51810af1ec4bb3b893d82177f3870",
+      "personal_path_replacements": 0
+    },
+    {
+      "path": "app/high-detail-viewer/sail-motion.js",
+      "bytes": 4980,
+      "sha256": "3a719aab3d1724584ab611ca09f81f66cb3135c218425b397ebbc569c8dca7e5",
+      "personal_path_replacements": 0
+    },
+    {
+      "path": "app/high-detail-viewer/surface-paint.js",
+      "bytes": 15464,
+      "sha256": "474c54cec4b8708e27a081ee9342ac5e149aea5974532d1e4427f31a035acd1b",
+      "personal_path_replacements": 0
+    },
+    {
+      "path": "app/high-detail-viewer/TemporalRefinementPass.js",
+      "bytes": 1480,
+      "sha256": "bf5cbe706192e91ec2baf263cd7536de4d367f5a8c760c50a6c770e160e5a59b",
+      "personal_path_replacements": 0
+    },
+    {
+      "path": "app/high-detail-viewer/viewer.js",
+      "bytes": 20347,
+      "sha256": "906fa186f142c5e3c0378937496ec03508809c40a32dc4515298137bfadf0123",
+      "personal_path_replacements": 0
+    },
+    {
+      "path": "app/tools/anvil_install.py",
+      "bytes": 8606,
+      "sha256": "74a3990da3d124ebfd58707c24c32ec31a4ae5c8f146e245bf341bddaefeb06d",
+      "personal_path_replacements": 0
+    },
+    {
+      "path": "app/tools/custom_cosmetic_injector.py",
+      "bytes": 23997,
+      "sha256": "951d6be6715e122ddef179a1ec1b95a277c705a3a91ef009d7ee2184f435f39a",
+      "personal_path_replacements": 0
+    },
+    {
+      "path": "app/tools/glb_to_j3d_full.py",
+      "bytes": 14225,
+      "sha256": "51c32482f51151cc3d790b4aa449e570cc5a6b1e0d218f6be0102c1584d9bf81",
+      "personal_path_replacements": 0
+    },
+    {
+      "path": "app/tools/j3d_to_glb_converter.py",
+      "bytes": 11584,
+      "sha256": "19777b661d62f12052beb216c11dfe51252c6cc3879da243b29b6ed14a67b2dc",
+      "personal_path_replacements": 0
+    },
+    {
+      "path": "app/tools/jackdaw_extract_texture.py",
+      "bytes": 4564,
+      "sha256": "ab6d6afe0d2d85522cb8205c20aa2f90846a94c23d8655a5bac7e42cd66b3eb1",
+      "personal_path_replacements": 3
+    },
+    {
+      "path": "app/tests/test_anvil_install.py",
+      "bytes": 5274,
+      "sha256": "6a7f933973067864a92e40b91827fb94781fa8b038a95bb37683c1f21650dd3a",
+      "personal_path_replacements": 0
+    },
+    {
+      "path": "app/tests/test_custom_cosmetic_injector.py",
+      "bytes": 10582,
+      "sha256": "151c8dddfccb822b7194f7a9fe379664f5fe088e334dfb20c73444c8ed802777",
+      "personal_path_replacements": 0
+    },
+    {
+      "path": "app/tools/anvil-support.json",
+      "bytes": 546,
+      "sha256": "4c40043d5ea4b8dce7265f93e738f60773187ae21e1b3fd419851a6e40bd2ee2",
+      "personal_path_replacements": 0
+    },
+    {
+      "path": "tools/anvil-bridge/Program.cs",
+      "bytes": 12794,
+      "sha256": "4296be9ef4c61c8b7bdae1972382825fb081cedbfafcd002ee6d7824278bd353",
+      "personal_path_replacements": 0
+    },
+    {
+      "path": "tools/anvil-bridge/AnvilBridge.csproj",
+      "bytes": 312,
+      "sha256": "42482942ca491af19e448bb70c90ace87d63c0101be409239a70d04f80758b68",
+      "personal_path_replacements": 0
+    }
+  ]
+}

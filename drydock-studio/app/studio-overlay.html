@@ -1,0 +1,23 @@
+<style>
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 57% 48%,#416c83 0%,#203e56 48%,#091727 100%);color:#e0e9e9;font:13px Segoe UI,sans-serif;overflow:hidden}button,select{background:#132e3b;color:#e0e9e9;border:1px solid #40606a;border-radius:5px;padding:7px;cursor:pointer}button:hover{border-color:#d8ac65}#tools{position:absolute;top:12px;left:12px;display:flex;gap:6px}#settings{position:absolute;right:12px;top:12px;width:215px;background:#091c26f2;border:1px solid #3a535a;border-radius:8px;padding:14px}summary{cursor:pointer;color:#e4bb76;font-weight:600}label{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:12px}select{max-width:125px}input[type=range]{width:110px}#selection{position:absolute;bottom:35px;left:12px;max-width:520px;background:#091c26e8;padding:12px;border-radius:6px}#selection:empty{display:none}#status{position:absolute;bottom:10px;left:12px;color:#c1ced1;pointer-events:none}#error{position:absolute;inset:25%;background:#182934;padding:20px;display:none}small{color:#a0b5bc}#restore{margin-top:8px}#detail{word-break:break-word;max-width:480px}
+.embedded{background:transparent}.embedded #selection,.embedded #textures{display:none}.embedded #settings:not([open]){visibility:hidden}
+#selection input[type=file]{display:block;margin:12px 0;max-width:100%}#selection input::file-selector-button{background:#132e3b;color:#e0e9e9;border:1px solid #40606a;border-radius:5px;padding:7px;cursor:pointer;margin-right:8px}#selection button{margin:10px 6px 8px 0}#selection details{margin-top:6px}#selection input[type=color]{width:44px;height:28px;border:1px solid #40606a;background:#132e3b;padding:2px}#selection p{color:#a0b5bc;line-height:1.45}
+html,body,#root{height:100%;width:100%;margin:0;padding:0;overflow:hidden}
+.mesh-editor-layout,.mesh-editor-page,.mesh-editor-shell,.mesh-editor-workspace{height:100vh!important;width:100vw!important;margin:0!important;padding:0!important;max-height:none!important;display:block!important}
+.mesh-editor-layout>header,.mesh-editor-toolbar,.mesh-editor-tool-rail,.mesh-editor-sidebar,.mesh-editor-panel,.mesh-editor-feedback,.mesh-editor-workspace>aside{display:none!important}
+.mesh-editor-canvas-shell{position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important;min-height:0!important;margin:0!important;border:0!important;border-radius:0!important;background:radial-gradient(ellipse at 57% 48%,#416c83,#203e56 48%,#091727)!important}
+.main-footer,[class*="main-footer"]{display:none!important}#tools,#settings,#status,#error{z-index:100}#selection,#textures{display:none}#settings:not([open]){visibility:hidden}
+</style><div id="tools"><button id="fit">Fit ship</button><button id="deck">Deck</button><button id="side">Side</button><button id="textures">Textures: On</button></div>
+<details id="settings"><summary>Viewer settings</summary>
+<label>Quality<select id="quality"><option>Low</option><option>Medium</option><option selected>High</option><option disabled>Custom</option></select></label>
+<label>Normal detail<input id="normals" type="checkbox" checked></label>
+<label>Shadows<input id="shadows" type="checkbox" checked></label>
+<select id="aa" hidden><option value="4">Studio antialiasing</option></select>
+<label>Lighting<select id="lighting"><option>Daylight</option><option>Studio</option><option>Overcast</option></select></label>
+<label>Brightness<input id="exposure" type="range" min="0.5" max="2" step="0.05" value="1.15"></label>
+<label>Wireframe<input id="wireframe" type="checkbox"></label>
+<label>Fade other parts<input id="focusFade" type="checkbox" checked></label>
+<button id="reset" style="margin-top:14px">Reset settings</button>
+<p><small>Quality changes rendering cost. The full ship geometry stays intact.</small></p></details>
+<div id="selection"></div><div id="status">Loading the textured Jackdaw…</div><div id="error" role="alert"></div>
+<script type="module" src="/studio-bridge.js"></script>

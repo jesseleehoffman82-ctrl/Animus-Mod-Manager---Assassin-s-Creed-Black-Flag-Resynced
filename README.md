@@ -33,6 +33,27 @@ Animus keeps its managed library, deployment state, and recovery information
 inside its own application folder. Installing a newer numbered release over an
 existing installation preserves that data.
 
+## Screenshots
+
+Animus Mod & Outfit Manager **0.1.7 Beta**, captured during local testing.
+The third-party mods shown are examples and are not bundled with the manager.
+
+**Mods — installed items and enabled status.**
+
+![Mods — installed items and enabled status.](docs/screenshots/animus-mods.jpg)
+
+**Outfits — confirmation when an installation shares an occupied vanilla outfit slot.**
+
+![Outfits — confirmation when an installation shares an occupied vanilla outfit slot.](docs/screenshots/animus-outfit-conflict.jpg)
+
+**Crew — a custom crew texture pack and its vanilla replacement.**
+
+![Crew — a custom crew texture pack and its vanilla replacement.](docs/screenshots/animus-crew.jpg)
+
+**Sails — an imported sail design assigned to Red Striped Sails.**
+
+![Sails — an imported sail design assigned to Red Striped Sails.](docs/screenshots/animus-sails.jpg)
+
 ## What each tab manages
 
 ### Mods
@@ -168,6 +189,23 @@ are intentionally excluded from the source-only review archive.
 
 Development was human-directed and AI-assisted. Additional details are recorded
 in [DEVELOPMENT-NOTES.txt](DEVELOPMENT-NOTES.txt).
+
+## License
+
+Copyright (C) 2026 Jesse Hoffman.
+
+The original Animus Mod & Outfit Manager source code in this repository is
+licensed under the **GNU General Public License, version 3 only**
+(`GPL-3.0-only`). You may redistribute and modify it under those terms.
+See [LICENSE](LICENSE) for the full license. The software is provided without
+warranty, to the extent permitted by law.
+
+Third-party code, runtimes, SDKs, and utilities retain their own licenses;
+see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). This grant does not
+relicense third-party game assets, names, logos, or imagery.
+
+Jackdaw Drydock Studio's development overview does not publish or license
+its unpublished application source code.
 
 ## Feedback
 
