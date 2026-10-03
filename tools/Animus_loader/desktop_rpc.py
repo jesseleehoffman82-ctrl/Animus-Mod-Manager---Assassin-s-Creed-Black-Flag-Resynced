@@ -20,6 +20,7 @@ from .packs import CATEGORY_CREW, CATEGORY_GENERAL, CATEGORY_OUTFIT, CATEGORY_SA
 from .crew_catalog import crew_targets
 from .sail_catalog import sail_targets
 from . import crew_patch
+from .general_texture_catalog import cannon_choices, target_for_general_filename
 
 ROOT = Path(__file__).resolve().parents[2]
 MODS_ROOT = ROOT / "mods"
@@ -46,12 +47,14 @@ def _save_settings(settings: dict) -> None:
 
 
 class DesktopRpc:
-    def __init__(self) -> None:
+    def __init__(self, *, read_only: bool = False) -> None:
         settings = _load_settings()
         self.game_dir = Path(settings.get("game_dir") or DEFAULT_GAME_DIR)
         self.loader = Loader(game_dir=self.game_dir)
         self.manager = PackManager(self.game_dir, self.loader.mods_root)
         self.logs: list[dict] = []
+        if read_only:
+            return
         try:
             compatibility = self.loader.ensure_proxy_compatibility()
             if compatibility.get("message"):
@@ -124,6 +127,7 @@ class DesktopRpc:
                 "path": str(path),
             })
         staged = set(self.manager._staged(CATEGORY_GENERAL))
+        deployed = self.manager.deployed_pack_ids()
         for pack in self.manager.list_packs(CATEGORY_GENERAL):
             meta = self.manager._pack_meta(pack)
             result.append({
@@ -132,15 +136,95 @@ class DesktopRpc:
                 "version": meta.get("version", ""),
                 "author": meta.get("author", ""),
                 "description": meta.get("description", "Managed general texture replacement."),
+                "replaces": meta.get("replaces", []),
+                "cannon_set": meta.get("cannon_set"),
                 "targets": len(pack.slots),
-                "enabled": pack.id in staged,
+                "enabled": pack.id in deployed,
+                "deployment_pending": pack.id in staged and pack.id not in deployed,
                 "managed_type": "texture-pack",
                 "pack_category": CATEGORY_GENERAL,
             })
         return result
 
+    def _update_history(self) -> dict:
+        try:
+            return json.loads((self.loader.mods_root / "update-history.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+
+    def _record_update(self, kind, old_id, new_id, previous_version, version):
+        history = self._update_history()
+        history.pop(f"{kind}:{old_id}", None)
+        history[f"{kind}:{new_id}"] = {
+            "updated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+            "previous_version": str(previous_version or "Unknown"),
+            "updated_version": str(version or "Unknown"),
+        }
+        path = self.loader.mods_root / "update-history.json"
+        temporary = path.with_suffix(".tmp")
+        temporary.write_text(json.dumps(history, indent=2) + "\n", encoding="utf-8")
+        temporary.replace(path)
+
+    def _forget_update(self, kind, item_id):
+        history = self._update_history()
+        if history.pop(f"{kind}:{item_id}", None) is not None:
+            path = self.loader.mods_root / "update-history.json"
+            path.write_text(json.dumps(history, indent=2) + "\n", encoding="utf-8")
+
+    def _cannon_targets(self, source, old_id=None):
+        import tempfile
+        with tempfile.TemporaryDirectory(prefix="animus_cannon_preview_") as folder:
+            source = Path(source)
+            if source.suffix.lower() in {".zip", ".7z", ".rar"}:
+                self.manager._extract_archive(source, Path(folder))
+                files = [p for p in Path(folder).rglob("*") if p.suffix.lower() in {".png", ".dds"}]
+            elif source.is_dir():
+                files = [p for p in source.rglob("*") if p.suffix.lower() in {".png", ".dds"}]
+            else:
+                files = [source] if source.suffix.lower() in {".png", ".dds"} else []
+            recognized = files and all(target_for_general_filename(p.name) for p in files)
+        old = self.manager.get_pack(old_id) if old_id else None
+        selected = self.manager._pack_meta(old).get("cannon_set", "gold") if old else "silver"
+        return {"targets": cannon_choices() if recognized else [], "default_id": selected}
+
+    def _preview_update(self, kind, item_id, source, cannon_set=None):
+        """Inspect in disposable storage; never deploy or alter the real library."""
+        import tempfile
+        with tempfile.TemporaryDirectory(prefix="animus_update_preview_") as folder:
+            if kind == "mod":
+                old_path = self._find_package(item_id)
+                if old_path is None:
+                    raise LoaderError("The mod being updated could not be found.")
+                old = self.loader.read_package(old_path)
+                temporary = Loader(self.game_dir, Path(folder))
+                if old.manifest.get("crew_patch"):
+                    with crew_patch.package_source(source) as native:
+                        if native is None:
+                            raise LoaderError("Select a crew material .jmod or ZIP wrapper.")
+                        incoming = temporary.read_package(native)
+                        if crew_patch.metadata(incoming)["target_id"] != crew_patch.metadata(old)["target_id"]:
+                            raise LoaderError("An update must retain the same vanilla crew destination.")
+                else:
+                    _, incoming, _ = temporary.import_package(source)
+                return {"name": old.name, "previous_version": old.version or "Unknown",
+                        "incoming_name": incoming.name, "version": incoming.version or "Unknown"}
+            old = self.manager.get_pack(item_id)
+            if old is None or old.category != kind:
+                raise PackError("The texture pack being updated could not be found.")
+            meta = self.manager._pack_meta(old)
+            temporary = PackManager(self.game_dir, Path(folder))
+            temporary._baseline_manager = self.manager
+            incoming = temporary.import_pack(source, category=kind,
+                sail_target_id=meta.get("sail_target_id") if kind == CATEGORY_SAIL else None,
+                crew_target_id=(meta.get("crew_target_id") or "auto") if kind == CATEGORY_CREW else None,
+                cannon_set=(cannon_set or meta.get("cannon_set")) if kind == CATEGORY_GENERAL else None)
+            incoming_meta = temporary._pack_meta(incoming)
+            return {"name": old.name, "previous_version": meta.get("version") or "Unknown",
+                    "incoming_name": incoming.name, "version": incoming_meta.get("version") or "Unknown"}
+
     def list_packs(self, category: str) -> list[dict]:
         staged = set(self.manager._staged(category))
+        deployed = self.manager.deployed_pack_ids()
         packs = self.manager.list_packs(category=category)
         result = []
         for pack in packs:
@@ -156,12 +240,13 @@ class DesktopRpc:
                 "description": meta.get("description", ""),
                 "replaces": replaces,
                 "slots": len(pack.slots),
-                "enabled": pack.id in staged,
+                "enabled": pack.id in deployed,
+                "deployment_pending": pack.id in staged and pack.id not in deployed,
                 "shared_with": [
                     {
                         "id": item["id"],
                         "name": item["name"],
-                        "enabled": bool(item.get("enabled")),
+                        "enabled": item["id"] in deployed,
                     }
                     for item in self.manager.sharing_packs(pack)
                 ],
@@ -226,12 +311,15 @@ class DesktopRpc:
                     elif target.exists():
                         target.unlink()
                     raise
+        if old_name:
+            self._record_update("mod", old_name, package.name, old.version, package.version)
+            self.log(f"Updated '{package.name}': {old.version or 'Unknown'} → {package.version or 'Unknown'}.", "ok")
         self.log(f"{'Updated' if old_name else 'Installed'} '{package.name}' — material patch for {meta['target_name']}. In-game appearance requires testing.", "ok")
         return {"ok": True, "name": package.name}, self.state()
 
     def state(self) -> dict:
         executable = game_executable(self.game_dir)
-        return {
+        state = {
             "app_version": _app_version(),
             "game_dir": str(self.game_dir),
             "game_found": executable is not None,
@@ -244,8 +332,18 @@ class DesktopRpc:
             "sails": self.list_packs(CATEGORY_SAIL),
             "proxy_status": self.loader.proxy_status(),
         }
+        history = self._update_history()
+        for tab in ("mods", "outfits", "weapons", "crew", "sails"):
+            for row in state[tab]:
+                kind = "mod" if (tab == "mods" and row.get("managed_type") != "texture-pack") or row.get("managed_type") == "crew-material" else "pack"
+                row.update(history.get(f"{kind}:{row.get('id') or row['name']}", {}))
+        return state
 
     def dispatch(self, method: str, args: list) -> tuple[object, dict | None]:
+        if method == "get_cannon_targets":
+            return self._cannon_targets(args[0], str(args[1]) if len(args) > 1 else None), None
+        if method == "preview_update":
+            return self._preview_update(str(args[0]), str(args[1]), Path(args[2]), args[3] if len(args) > 3 else None), None
         if method in {"get_state", "refresh"}:
             if method == "refresh":
                 self.log("Refreshed.")
@@ -374,8 +472,13 @@ class DesktopRpc:
             try:
                 target, package, converted = self.loader.import_package(source)
             except LoaderError as mod_error:
+                cannon_set = str(args[1]) if len(args) > 1 else None
+                if cannon_set is None:
+                    choices = self._cannon_targets(source)
+                    if choices["targets"]:
+                        return {"requires_cannon_target": True, **choices}, None
                 try:
-                    pack = self.manager.import_pack(source, category=CATEGORY_GENERAL)
+                    pack = self.manager.import_pack(source, category=CATEGORY_GENERAL, cannon_set=cannon_set)
                 except PackError as texture_error:
                     message = str(texture_error)
                     if "No .dds or .png files found" in message:
@@ -394,7 +497,8 @@ class DesktopRpc:
                     }, None
                 self.manager.activate_imported(pack.id)
                 self.log(
-                    f"Installed general texture mod '{pack.name}' ({len(pack.slots)} slot(s)).",
+                    f"Installed general texture mod '{pack.name}' ({len(pack.slots)} slot(s))" +
+                    (f" — {cannon_set.title()} cannon set." if cannon_set else "."),
                     "ok",
                 )
                 return {
@@ -461,12 +565,16 @@ class DesktopRpc:
                 for original, saved in reversed(moved):
                     saved.rename(original)
                 raise
+            self._forget_update("mod", name)
             self.log(f"Uninstalled '{name}'; restored {len(restored)} file(s) and removed {len(moved)} package copy/copies from the library. Archives retained in recovery storage.", "ok")
             return {"ok": True}, self.state()
 
         if method == "update_mod_path":
             old_name, source = str(args[0]), Path(args[1])
             old_path = self._find_package(old_name)
+            if old_path is None:
+                raise LoaderError("The mod being updated could not be found.")
+            previous_version = self.loader.read_package(old_path).version
             if old_path and self.loader.read_package(old_path).manifest.get("crew_patch"):
                 return self._install_crew_material(source, old_name=old_name)
             target, package, converted = self.loader.import_package(source)
@@ -475,8 +583,9 @@ class DesktopRpc:
                 old_path.unlink()
             backups = self.loader.apply(target, priority=0)
             self._log_dll_compatibility(backups)
+            self._record_update("mod", old_name, package.name, previous_version, package.version)
             self.log(
-                f"Updated '{old_name}' with '{package.name} v{package.version}' — "
+                f"Updated '{old_name}': {previous_version or 'Unknown'} → {package.version or 'Unknown'} ('{package.name}') — "
                 f"restored {len(restored)} old and patched {len(backups)} target(s).",
                 "ok",
             )
@@ -496,6 +605,11 @@ class DesktopRpc:
             item_type, item_id, new_name = map(str, args[:3])
             if item_type == "mod":
                 self.loader.rename(item_id, new_name)
+                previous = self._update_history().get(f"mod:{item_id}")
+                if previous:
+                    history = self._update_history()
+                    history[f"mod:{new_name.strip()}"] = history.pop(f"mod:{item_id}")
+                    (self.loader.mods_root / "update-history.json").write_text(json.dumps(history, indent=2), encoding="utf-8")
             elif item_type in {CATEGORY_OUTFIT, CATEGORY_WEAPON, CATEGORY_CREW, CATEGORY_SAIL, CATEGORY_GENERAL}:
                 self.manager.rename_pack(item_id, new_name)
             else:
@@ -616,6 +730,7 @@ class DesktopRpc:
                 category=category,
                 sail_target_id=retained_sail_target,
                 crew_target_id=retained_crew_target,
+                cannon_set=(str(args[3]) if len(args) > 3 and args[3] else old_meta.get("cannon_set")) if category == CATEGORY_GENERAL else None,
             )
             new_meta_path = new_pack.dir / "meta.json"
             new_meta = self.manager._pack_meta(new_pack)
@@ -625,9 +740,11 @@ class DesktopRpc:
             new_meta_path.write_text(json.dumps(new_meta, indent=2) + "\n", encoding="utf-8")
             self.manager.set_enabled(new_pack.id, was_enabled)
             self.manager.remove_pack(old_id)
+            self._record_update("pack", old_id, new_pack.id, old_meta.get("version"), new_meta.get("version"))
             self.log(
-                f"Updated '{old_pack.name}' with '{new_pack.name}' "
-                f"({len(new_pack.slots)} texture slot(s)).",
+                f"Updated '{old_pack.name}': {old_meta.get('version') or 'Unknown'} → {new_meta.get('version') or 'Unknown'} ('{new_pack.name}') "
+                f"({len(new_pack.slots)} texture slot(s))." +
+                (f" Target: {new_meta['cannon_set'].title()} cannon set." if new_meta.get("cannon_set") else ""),
                 "ok",
             )
             return {"ok": True, "id": new_pack.id, "name": new_pack.name}, self.state()
@@ -649,9 +766,7 @@ class DesktopRpc:
                         "category": category,
                         "conflicts": conflicts,
                     }, None
-            self.manager.revert_all(validate_only=True)
-            self.manager.set_enabled(pack_id, enabled)
-            result = self.manager.apply_staged()
+            result = self.manager.apply_enabled_changes({pack_id: enabled})
             self.log(f"{'Enabled' if enabled else 'Disabled'} '{pack.name if pack else pack_id}' and applied changes.", "ok")
             for conflict in result.get("conflicts", []):
                 self.log(
@@ -682,6 +797,7 @@ class DesktopRpc:
             pack_id = str(args[0])
             pack = self.manager.get_pack(pack_id)
             result = self.manager.remove_pack(pack_id)
+            self._forget_update("pack", pack_id)
             self.log(f"Uninstalled '{pack.name if pack else pack_id}' and rebuilt enabled texture packs.", "ok")
             return {"ok": True, "removed": result["removed"]}, self.state()
 
@@ -720,7 +836,7 @@ class DesktopRpc:
 
 def main() -> int:
     request = json.loads(sys.stdin.read() or "{}")
-    rpc = DesktopRpc()
+    rpc = DesktopRpc(read_only=request.get("method") in {"preview_update", "get_cannon_targets"})
     try:
         result, state = rpc.dispatch(str(request.get("method", "")), request.get("args") or [])
         response = {"result": result, "state": state, "logs": rpc.logs, "error": None}

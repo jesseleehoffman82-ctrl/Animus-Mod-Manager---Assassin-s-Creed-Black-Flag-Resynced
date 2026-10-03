@@ -25,10 +25,11 @@ import json
 import os
 import re
 import time
-from dataclasses import dataclass, field
+from copy import copy
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
-from .forge import ForgeArchive, ForgeError, Oodle, compress_material
+from .forge import ForgeArchive, ForgeError, Oodle, compress_material, decompress_bms
 from .texture import PlanItem, parse_filename, plan_texture
 from .crew_catalog import get_crew_target, target_for_filename, target_for_texture
 from .general_texture_catalog import target_for_general_filename
@@ -100,6 +101,8 @@ class Journal:
     external: list[JournalEntry] = field(default_factory=list)
     embedded: list[JournalEmbedded] = field(default_factory=list)
     appended: list = field(default_factory=list)  # [ [off, len], ... ]
+    complete: bool = True
+    overrides: list[str] = field(default_factory=list)
 
 
 def _sha16(data: bytes) -> str:
@@ -232,7 +235,9 @@ class PackManager:
     def import_pack(self, source_dir: Path, name: str | None = None,
                     category: str = CATEGORY_OUTFIT,
                     sail_target_id: str | None = None,
-                    crew_target_id: str | None = None) -> Pack:
+                    crew_target_id: str | None = None,
+                    _archive_name: str | None = None,
+                    cannon_set: str | None = None) -> Pack:
         """Import a folder/archive of DDS/PNG textures (named mat id + slot).
 
         `source_dir` can be a folder, a `.zip`, a `.7z` (if py7zr installed),
@@ -251,14 +256,15 @@ class PackManager:
                     detected_name = name or self._archive_pack_name(tmp, source_dir.stem)
                     return self.import_pack(tmp, name=detected_name, category=category,
                                             sail_target_id=sail_target_id,
-                                            crew_target_id=crew_target_id)
+                                            crew_target_id=crew_target_id,
+                                            _archive_name=source_dir.stem, cannon_set=cannon_set)
                 finally:
                     shutil.rmtree(tmp, ignore_errors=True)
             if suffix in (".dds", ".png"):
                 self._validate_pack_category([source_dir], category, {}, source_dir.parent)
                 return self._import_files([source_dir], name or source_dir.stem,
                                           category, str(source_dir), {}, sail_target_id,
-                                          crew_target_id)
+                                          crew_target_id, cannon_set)
             raise PackError(f"Unsupported pack file: {source_dir.name}")
         if not source_dir.is_dir():
             raise PackError(f"Not a folder or archive: {source_dir}")
@@ -273,15 +279,25 @@ class PackManager:
         if not files:
             raise PackError(f"No .dds or .png files found in {source_dir}")
         metadata = self._pack_metadata(source_dir)
-        self._validate_pack_category(files, category, metadata, source_dir)
+        if "version" not in metadata and _archive_name:
+            # Nexus download filenames carry an explicit version before their
+            # timestamp; do not mistake a resource id or game version for it.
+            match = re.search(r"(?i)\s+\d+\s+v?(\d+(?:\.\d+)*(?:\s*(?:alpha|beta))?)\s+\d{4}-\d{2}-\d{2}T\S+\s+[A-Za-z0-9]+$", _archive_name)
+            if not match:
+                match = re.search(r"(?i)(?:^|[ _-])v(\d+(?:\.\d+)+(?:[-_](?:alpha|beta)\d*)?)(?=$|[ _-])", _archive_name)
+            if match:
+                metadata["version"] = match.group(1).strip()
+        self._validate_pack_category(files, category, metadata, source_dir,
+                                     archive_name=_archive_name)
         name = (name or metadata.get("name") or source_dir.name).strip() or "Unnamed Pack"
         return self._import_files(files, name, category, str(source_dir), metadata,
-                                  sail_target_id, crew_target_id)
+                                  sail_target_id, crew_target_id, cannon_set)
 
     @staticmethod
     def _validate_pack_category(files: list[Path], requested: str,
-                                metadata: dict, source_dir: Path) -> None:
-        """Reject only confidently identified packs from an incorrect tab."""
+                                metadata: dict, source_dir: Path,
+                                archive_name: str | None = None) -> None:
+        """Reject wrong categories; Weapons also requires positive identification."""
         declared = str(metadata.get("pack_category") or "").casefold().strip()
         aliases = {
             "outfits": CATEGORY_OUTFIT, "outfit": CATEGORY_OUTFIT,
@@ -291,20 +307,28 @@ class PackManager:
             "general": CATEGORY_GENERAL, "ship": CATEGORY_GENERAL,
         }
         detected = aliases.get(declared)
-        names = " ".join([source_dir.name, *(path.name for path in files)]).casefold()
+        names = " ".join([
+            archive_name or "", source_dir.name,
+            str(metadata.get("name") or ""),
+            *(str(path.relative_to(source_dir)) for path in files),
+        ]).casefold()
         if detected is None and any(target_for_filename(path.name) for path in files):
             detected = CATEGORY_CREW
-        if detected is None:
+        if detected is None or requested == CATEGORY_WEAPON:
             markers = {
                 CATEGORY_SAIL: ("sail",),
                 CATEGORY_GENERAL: ("cannon", "mortar", "swivel", "culverin", "longgun",
                                    "figurehead", "ship hull", "jackdaw hull", "ship wheel", "cabin"),
                 CATEGORY_OUTFIT: ("outfit", "robe", "redingote"),
-                CATEGORY_WEAPON: ("pistol", "sword", "blade", "weapon skin"),
+                CATEGORY_WEAPON: ("pistol", "sword", "blade", "weapon", "blunderbuss", "musket"),
             }
             matches = [kind for kind, words in markers.items()
                        if any(word in names for word in words)]
-            if len(matches) == 1:
+            # An outfit must not become a weapon just because the archive
+            # also mentions swords, or its manifest says 'weapon'.
+            if requested == CATEGORY_WEAPON and CATEGORY_OUTFIT in matches:
+                detected = CATEGORY_OUTFIT
+            elif detected is None and len(matches) == 1:
                 detected = matches[0]
         if detected is not None and detected != requested:
             destinations = {
@@ -317,6 +341,13 @@ class PackManager:
             raise PackError(
                 f"This appears to be a {detected} texture pack. "
                 f"Install it from the {destinations[detected]} tab instead."
+            )
+        if requested == CATEGORY_WEAPON and detected is None:
+            raise PackError(
+                "This pack could not be identified as a weapon texture pack. "
+                "Nothing was installed. Outfit packs belong in the Outfits tab. "
+                "Weapon packs need an identifying name (such as pistol or sword) "
+                "or metadata declaring their weapon category."
             )
 
     @staticmethod
@@ -343,6 +374,8 @@ class PackManager:
             lowered = {str(key).casefold(): value for key, value in data.items()}
             for alias in aliases:
                 value = lowered.get(alias)
+                if aliases == ("version", "mod_version") and isinstance(value, (int, float)) and not isinstance(value, bool):
+                    return str(value)
                 if isinstance(value, str) and value.strip():
                     return value.strip()
                 if isinstance(value, list):
@@ -396,12 +429,18 @@ class PackManager:
             if match:
                 metadata["replaces"] = [match.group(1).strip()]
                 heading = match.group(0).casefold()
-                if heading.startswith("outfit"):
+                if re.search(r"\boutfit\b", heading):
                     metadata.setdefault("pack_category", CATEGORY_OUTFIT)
-                elif heading.startswith("sail"):
+                elif re.search(r"\bsail\b", heading):
                     metadata.setdefault("pack_category", CATEGORY_SAIL)
                 break
 
+        if "version" not in metadata:
+            for text in readme_texts:
+                match = re.search(r"(?im)^\s*(?:mod\s+)?version\s*[:=]\s*(\S[^\r\n]*)", text)
+                if match:
+                    metadata["version"] = match.group(1).strip()
+                    break
         if "author" not in metadata:
             author_pattern = re.compile(
                 r"(?im)^\s*(?:mod\s+author|author|created\s+by|made\s+by)\s*[:=-]\s*(.+?)\s*$")
@@ -527,9 +566,14 @@ class PackManager:
     def _import_files(self, files: list, name: str, category: str,
                       source_label: str, metadata: dict | None = None,
                       sail_target_id: str | None = None,
-                      crew_target_id: str | None = None) -> Pack:
+                      crew_target_id: str | None = None,
+                      cannon_set: str | None = None) -> Pack:
         """Validate + copy a set of texture files into a new library pack."""
         import shutil
+        if cannon_set is not None:
+            from .general_texture_catalog import CANNON_SETS
+            if category != CATEGORY_GENERAL or cannon_set not in CANNON_SETS:
+                raise PackError("Select a supported cannon set in the Mods tab.")
         pack_id = _make_id(name)
         p_dir = self.textures_root / pack_id
         tex_dir = p_dir / "textures"
@@ -562,6 +606,7 @@ class PackManager:
 
             slots: list[PackSlot] = []
             imported = []
+            sail_orientations = {}
             errors: list[str] = []
             replaces: set[str] = set()
             for path in files:
@@ -577,7 +622,7 @@ class PackManager:
                     if crew_target is not None:
                         mat, slot, kind = crew_target.material_id, 0, "crew-catalog"
                 if mat is None and category == CATEGORY_GENERAL:
-                    general_target = target_for_general_filename(path.name)
+                    general_target = target_for_general_filename(path.name, cannon_set)
                     if general_target is not None:
                         mat, slot, kind = general_target.material_id, general_target.slot, "general-catalog"
                 if mat is None and category == CATEGORY_SAIL:
@@ -593,7 +638,15 @@ class PackManager:
                     errors.append(f"{path.name}: {exc}")
                     continue
                 dest = tex_dir / f"0x{mat:X}_slot{slot}.dds"
-                data = self._texture_to_dds(path, slot_info)
+                if category == CATEGORY_GENERAL and kind == "general-catalog":
+                    data = self._texture_to_dds(path, slot_info, preserve_game_alpha=True)
+                elif category == CATEGORY_SAIL:
+                    data = self._texture_to_dds(path, slot_info, sail_design=True)
+                    sail_orientations[str(dest.relative_to(p_dir))] = (
+                        "game-native-dds" if path.suffix.lower() == ".dds"
+                        else "editable-png-flip-y-v1")
+                else:
+                    data = self._texture_to_dds(path, slot_info)
                 dest.write_bytes(data)
                 imported.append(str(dest.relative_to(p_dir)))
                 slots.append(PackSlot(mat, slot, slot_info.tex, slot_info.W,
@@ -603,7 +656,7 @@ class PackManager:
                     if crew_target is not None:
                         replaces.add(crew_target.display_name)
                 elif category == CATEGORY_GENERAL:
-                    general_target = target_for_general_filename(path.name)
+                    general_target = target_for_general_filename(path.name, cannon_set)
                     if general_target is not None:
                         replaces.add(general_target.display_name)
                 elif category == CATEGORY_SAIL:
@@ -611,6 +664,8 @@ class PackManager:
                     if sail_target is not None:
                         replaces.add(sail_target.display_name)
 
+            if cannon_set and errors:
+                raise PackError("The selected cannon set could not be imported completely:\n" + "\n".join(errors))
             if not slots:
                 if category == CATEGORY_GENERAL:
                     raise PackError(
@@ -641,6 +696,10 @@ class PackManager:
                     meta[field] = value if field == "replaces" else str(value)
             if replaces:
                 meta["replaces"] = sorted(replaces)
+            if sail_orientations:
+                meta["sail_orientation"] = sail_orientations
+            if category == CATEGORY_GENERAL and any(target_for_general_filename(p.name) for p in files):
+                meta["cannon_set"] = cannon_set or "gold"
             if selected_sail is not None:
                 meta["sail_target_id"] = selected_sail.id
                 meta["sail_texture_id"] = f"0x{selected_sail.texture_id:X}"
@@ -724,6 +783,21 @@ class PackManager:
                 keys.add(label)
         return keys
 
+    def apply_enabled_changes(self, changes: dict[str, bool]) -> dict:
+        """Commit requested checkbox changes only when deployment succeeds."""
+        self.revert_all(validate_only=True)
+        previous = self.library_path.read_bytes() if self.library_path.exists() else None
+        try:
+            for pack_id, enabled in changes.items():
+                self.set_enabled(pack_id, enabled)
+            return self.apply_staged()
+        except Exception:
+            if previous is None:
+                self.library_path.unlink(missing_ok=True)
+            else:
+                self.library_path.write_bytes(previous)
+            raise
+
     def activate_imported(self, pack_id: str, disable_conflicts: bool = False) -> dict:
         """Enable an imported pack, optionally disabling every enabled overlap."""
         pack = self.get_pack(pack_id)
@@ -732,11 +806,9 @@ class PackManager:
         conflicts = self.enabled_conflicts(pack)
         if conflicts and not disable_conflicts:
             return {"pack": pack, "conflicts": conflicts, "requires_confirmation": True}
-        self.revert_all(validate_only=True)
-        for conflict in conflicts:
-            self.set_enabled(conflict["id"], False)
-        self.set_enabled(pack.id, True)
-        applied = self.apply_staged(pack.category)
+        changes = {conflict['id']: False for conflict in conflicts}
+        changes[pack.id] = True
+        applied = self.apply_enabled_changes(changes)
         lib = self._load_library()
         lib["active"] = pack.id
         self._save_library(lib)
@@ -772,12 +844,69 @@ class PackManager:
             raise ValueError(f"no slot {slot} (this material has {len(slots)} textures)")
         return read_slot(res, mat, slot, slots)
 
-    def _texture_to_dds(self, path: Path, slot_info) -> bytes:
+    def _texture_to_dds(self, path: Path, slot_info, preserve_game_alpha: bool = False,
+                        sail_design: bool = False) -> bytes:
         """Return DDS bytes for the texture (passthrough for DDS, encode PNG)."""
         if path.suffix.lower() == ".dds":
             return path.read_bytes()
+        if sail_design:
+            from .png import encode_sail_png
+            return encode_sail_png(path, slot_info)
         from .png import encode_png_to_dds
-        return encode_png_to_dds(path, slot_info)
+        data = encode_png_to_dds(path, slot_info)
+        if preserve_game_alpha:
+            from .png import encode_cannon_rgb
+            baseline_manager = getattr(self, "_baseline_manager", self)
+            baseline = baseline_manager._original_texture_dds(slot_info, data)
+            return encode_cannon_rgb(path, slot_info, baseline)
+        return data
+
+    def _original_texture_dds(self, slot_info, template: bytes) -> bytes:
+        """Read pre-install pixels, using owned restore records when deployed.
+
+        Never use already-recoloured live alpha as the baseline for an update.
+        No game writes; malformed/missing backups fail before import completes.
+        """
+        archive = ForgeArchive(self.forge_path, self._oodle())
+        plan = plan_texture(archive, slot_info.mat, slot_info.slot, template)
+        journal = self._load_journal()
+        if journal and journal.forge != str(self.forge_path.resolve()):
+            raise PackError("Texture baseline journal belongs to a different game install")
+        original = archive.read_material(plan.mat)
+        for entry in journal.embedded if journal else []:
+            if entry.mat != plan.mat:
+                continue
+            if archive.read_toc_row(plan.mat) != (entry.new_off, entry.new_len):
+                raise PackError("Cannon material changed outside Animus; cannot recover its original alpha safely")
+            original = decompress_bms(archive.read_at(entry.orig_off, entry.orig_len), self._oodle())
+        chunks = {m["lvl"]: bytearray(m["veri"]) for m in plan.mips}
+        filled = set()
+        for mip in plan.external:
+            data = archive.read_at(mip.offset, mip.forge_len)
+            for entry in journal.external if journal else []:
+                if entry.rid != mip.rid:
+                    continue
+                if _sha16(data) not in (entry.sha_new, entry.sha_orig):
+                    raise PackError("Cannon mip changed outside Animus; original alpha cannot be recovered safely")
+                data = entry.backup.read_bytes()
+                if len(data) != entry.length or _sha16(data) != entry.sha_orig:
+                    raise PackError("Cannon alpha backup is damaged")
+            chunks[mip.lvl] = bytearray(data)
+            filled.add(mip.lvl)
+        if plan.embedded:
+            if len(original) != len(archive.read_material(plan.mat)):
+                raise PackError("Original cannon material layout no longer matches")
+            for lvl, roff, pitch, rows, rb in plan.embedded.layout:
+                if lvl not in chunks:
+                    continue
+                start = plan.embedded.pixel_start + roff
+                for row in range(rows):
+                    chunks[lvl][row*rb:(row+1)*rb] = original[start+row*pitch:start+row*pitch+rb]
+                filled.add(lvl)
+        if filled != set(chunks):
+            raise PackError("Cannot read every original cannon mip; alpha preservation aborted")
+        head = 148 if template[84:88] == b"DX10" else 128
+        return template[:head] + b"".join(chunks[i] for i in sorted(chunks))
 
     # ------------------------------------------------------------------ #
     # journal
@@ -802,7 +931,9 @@ class PackManager:
                        forge=raw.get("forge", ""),
                        forge_size=raw.get("forge_size", 0),
                        external=ext, embedded=emb,
-                       appended=raw.get("appended", []))
+                       appended=raw.get("appended", []),
+                       complete=raw.get("complete", True),
+                       overrides=raw.get("overrides", []))
 
     def _save_journal(self, journal: Journal) -> None:
         raw = {
@@ -823,6 +954,8 @@ class PackManager:
                 for e in journal.embedded
             ],
             "appended": journal.appended,
+            "complete": journal.complete,
+            "overrides": journal.overrides,
         }
         self.journal_path.write_text(json.dumps(raw, indent=2) + "\n", encoding="utf-8")
 
@@ -870,8 +1003,110 @@ class PackManager:
             self.revert_all()
         return self._apply_plans([pack], [pack.category], {pack.id: pack})
 
+    def _override_manager(self, name: str) -> PackManager:
+        # Never trust a journal-supplied path outside these game archives.
+        if not re.fullmatch(r"DataPC_boot(?:_patch_\d+|_dx12)\.forge", name, re.I):
+            raise PackError("Invalid sail override archive in deployment journal")
+        manager = copy(self)
+        manager.forge_path = self.game_dir / name
+        manager.journal_path = self.textures_root / f"journal-{name}.json"
+        manager.backups_dir = self.backups_dir / name
+        manager._is_override = True
+        return manager
+
+    def _sail_overrides(self, packs: list[Pack]) -> list[tuple[PackManager, list[Pack]]]:
+        """Validate matching sail resources in boot patch/renderer archives.
+
+        Update every existing copy rather than guessing archive precedence.
+        No unrelated resources, code mods, or entire archives are replaced.
+        """
+        sails = [p for p in packs if p.category == CATEGORY_SAIL]
+        if self.forge_path.name != OUTFIT_FORGE or not sails:
+            return []
+        result = []
+        for path in sorted(self.game_dir.glob("DataPC_boot*.forge")):
+            if not re.fullmatch(r"DataPC_boot(?:_patch_\d+|_dx12)\.forge", path.name, re.I):
+                continue
+            manager = self._override_manager(path.name)
+            archive = ForgeArchive(path, self._oodle())
+            selected = []
+            for pack in sails:
+                slots = [s for s in pack.slots if archive.has(s.mat)]
+                if not slots:
+                    continue
+                subset = replace(pack, slots=slots)
+                plans, errors = manager._plans_for(subset, archive)
+                if errors or not plans:
+                    raise PackError(f"Nothing was changed; {path.name}: " +
+                                    "\n".join(errors or ["no sail textures to apply"]))
+                selected.append(subset)
+            if selected:
+                result.append((manager, selected))
+        return result
+
     def _apply_plans(self, packs: list[Pack], categories: list[str],
                      by_id: dict) -> dict:
+        overrides = self._sail_overrides(packs)
+        for manager, _ in overrides:
+            if manager.journal_path.exists():
+                raise PackError("Sail archive recovery record already exists; keep its backups: "
+                                + str(manager.journal_path))
+        result = self._apply_single_archive(packs, categories, by_id,
+                                           [m.forge_path.name for m, _ in overrides])
+        for manager, selected in overrides:
+            manager.backups_dir.mkdir(parents=True, exist_ok=True)
+            applied = manager._apply_single_archive(selected, [CATEGORY_SAIL], by_id)
+            result["external_mips"] += applied["external_mips"]
+            result["materials"] += applied["materials"]
+        journal = self._load_journal()
+        journal.complete = True
+        self._save_journal(journal)
+        result["sail_override_archives"] = [m.forge_path.name for m, _ in overrides]
+        return result
+
+    def repair_sail_overrides(self) -> dict:
+        """Migrate a complete base-only deployment without rewriting other mods.
+
+        This explicit repair is not run during startup or state rendering.
+        Existing multi-archive deployments use normal apply/revert instead.
+        """
+        previous = self._load_journal()
+        if previous is None or not previous.complete or previous.overrides:
+            raise PackError("Sail repair requires a complete, base-only deployment journal")
+        self.revert_all(validate_only=True)
+        selected = [self.get_pack(pid) for pid in previous.packs]
+        overrides = self._sail_overrides([p for p in selected if p is not None])
+        if not overrides:
+            return {"sail_override_archives": [], "materials": 0}
+        for manager, _ in overrides:
+            if manager.journal_path.exists():
+                raise PackError("Existing sail archive recovery record must be resolved first: "
+                                + str(manager.journal_path))
+        original_journal = self.journal_path.read_bytes()
+        journal = replace(previous, complete=False,
+                          overrides=[m.forge_path.name for m, _ in overrides])
+        self._save_journal(journal)
+        materials = 0
+        try:
+            for manager, subset in overrides:
+                manager.backups_dir.mkdir(parents=True, exist_ok=True)
+                result = manager._apply_single_archive(subset, [CATEGORY_SAIL],
+                                                       {p.id: p for p in subset})
+                materials += result["materials"]
+            journal.complete = True
+            self._save_journal(journal)
+        except Exception:
+            # Never revert the base deployment here. Only undo this repair.
+            for manager, _ in overrides:
+                manager.revert_all(validate_only=True)
+            for manager, _ in reversed(overrides):
+                manager.revert_all()
+            self.journal_path.write_bytes(original_journal)
+            raise
+        return {"sail_override_archives": journal.overrides, "materials": materials}
+
+    def _apply_single_archive(self, packs: list[Pack], categories: list[str],
+                              by_id: dict, overrides: list[str] | None = None) -> dict:
         """Inject a set of packs (MO2-style merge), journaling everything.
 
         `packs` is in load order (highest priority LAST). When two enabled packs
@@ -906,7 +1141,9 @@ class PackManager:
         journal = Journal(packs=[p.id for p in packs],
                           categories=categories,
                           forge=str(self.forge_path.resolve()),
-                          forge_size=self.forge_path.stat().st_size)
+                          forge_size=self.forge_path.stat().st_size,
+                          overrides=overrides or [],
+                          complete=False)
 
         # --- phase 1: external mips (in-place) ---
         for _pack, plan in resolved:
@@ -917,6 +1154,7 @@ class PackManager:
                 journal.external.append(JournalEntry(
                     m.rid, m.offset, m.forge_len, _sha16(original),
                     _sha16(m.data), backup, pack_id=_pack.id))
+                self._save_journal(journal)
                 archive.write_at(m.offset, m.data)
             self._save_journal(journal)
 
@@ -951,11 +1189,14 @@ class PackManager:
             orig_off, orig_len = archive.read_toc_row(mat)
             new_off = archive.append_block(new_entry)
             new_len = len(new_entry)
-            archive.repoint_toc(mat, new_off, new_len)
             journal.embedded.append(JournalEmbedded(
                 mat, toc_pos, orig_off, orig_len, new_off, new_len, pack_id=_pack.id))
             journal.appended.append([new_off, new_len])
             self._save_journal(journal)
+            archive.repoint_toc(mat, new_off, new_len)
+
+        journal.complete = not journal.overrides
+        self._save_journal(journal)
 
         return {
             "packs": [p.id for p in packs],
@@ -980,6 +1221,23 @@ class PackManager:
         for cat in PACK_CATEGORIES:
             packs.extend(self.get_pack(pid) for pid in self._staged(cat))
         packs = [p for p in packs if p is not None]
+        # Check every requested payload before removing a working deployment.
+        # Previously a missing/invalid new DDS could restore all outfits first,
+        # then fail and leave the enabled checkmarks behind without a journal.
+        if packs:
+            archive = ForgeArchive(self.forge_path, self._oodle())
+            errors = []
+            for pack in packs:
+                plans, perr = self._plans_for(pack, archive)
+                errors.extend(f"{pack.name}: {error}" for error in perr)
+                if not plans and not perr:
+                    errors.append(f"{pack.name}: no textures to apply")
+            if errors:
+                raise PackError("Nothing was changed; textures could not be applied:\n" + "\n".join(errors))
+            self._sail_overrides(packs)  # Validate patch archives before any revert.
+        previous = self._load_journal()
+        previous_packs = [self.get_pack(pid) for pid in previous.packs] if previous else []
+        previous_packs = [p for p in previous_packs if p is not None]
         # The journal represents the complete injected set. Always restore it
         # before rebuilding, including when the final pack was just disabled.
         self.revert_all()
@@ -987,7 +1245,35 @@ class PackManager:
             return {"packs": [], "external_mips": 0, "materials": 0,
                     "conflicts": [], "errors": [], "applied": 0}
         by_id = {p.id: p for p in packs}
-        return self._apply_plans(packs, categories, by_id)
+        try:
+            return self._apply_plans(packs, categories, by_id)
+        except Exception as failure:
+            # Roll back partial writes, then restore the last complete set.
+            # Keep recovery metadata if ownership checks prevent safe rollback.
+            try:
+                self.revert_all()
+                if previous and previous.complete and previous_packs:
+                    self._apply_plans(previous_packs, previous.categories,
+                                      {p.id: p for p in previous_packs})
+            except Exception as recovery:
+                raise PackError(f"Texture deployment failed: {failure}. Recovery also failed: {recovery}. "
+                                "Recovery records were retained; do not delete backups.") from failure
+            raise PackError(f"Texture deployment failed: {failure}. Previous deployment was restored.") from failure
+
+    def deployed_pack_ids(self) -> set[str]:
+        """A requested checkbox alone is not proof of successful deployment."""
+        journal = self._load_journal()
+        if journal is None or not journal.complete or not self.forge_path.is_file():
+            return set()
+        if journal.forge != str(self.forge_path.resolve()):
+            return set()
+        for name in journal.overrides:
+            manager = self._override_manager(name)
+            child = manager._load_journal()
+            if (child is None or not child.complete or not manager.forge_path.is_file()
+                    or child.forge != str(manager.forge_path.resolve())):
+                return set()
+        return set(journal.packs)
 
     def revert_all(self, validate_only: bool = False) -> dict:
         """Revert the currently-injected set back to vanilla.
@@ -1049,11 +1335,15 @@ class PackManager:
         if issues:
             raise PackError("Cannot revert safely:\n" + "\n".join(issues))
 
+        children = [self._override_manager(name) for name in journal.overrides]
+        for manager in children:
+            manager.revert_all(validate_only=True)
+
         if validate_only:
             return {"reverted": 0, "issues": [], "packs": journal.packs}
 
         # Write reversals.
-        restored = 0
+        restored = sum(manager.revert_all()["reverted"] for manager in children)
         for k in active_embedded:
             archive.repoint_toc(k.mat, k.orig_off, k.orig_len)
             restored += 1
@@ -1073,9 +1363,10 @@ class PackManager:
                     pass
 
         self.journal_path.unlink(missing_ok=True)
-        lib = self._load_library()
-        lib["active"] = None
-        self._save_library(lib)
+        if not getattr(self, "_is_override", False):
+            lib = self._load_library()
+            lib["active"] = None
+            self._save_library(lib)
         return {
             "reverted": restored,
             "issues": issues,
@@ -1107,6 +1398,13 @@ class PackManager:
         journal = self._load_journal()
         if journal is None:
             return {"reverted": 0, "issues": ["no journal"], "pack": pack_id}
+        if journal.overrides:
+            # Rebuild the remaining set across all archives; a base-only revert
+            # would leave the overridden sail visible in the game.
+            self.revert_all(validate_only=True)
+            self.set_enabled(pack_id, False)
+            self.apply_staged()
+            return {"reverted": 1, "issues": [], "pack": pack_id}
         archive = ForgeArchive(self.forge_path, self._oodle())
         issues: list[str] = []
         restored: list = []
@@ -1177,27 +1475,37 @@ class PackManager:
         The complete enabled texture set is rebuilt first so none of this
         pack's injected bytes survive after its library files are removed.
         """
-        import shutil
+        import uuid
 
         pack = self.get_pack(pack_id)
         if pack is None:
             raise PackError(f"Unknown pack id: {pack_id}")
-
-        # Refuse an unsafe restoration BEFORE changing the enabled checkbox.
-        # A failed uninstall must not silently become a disable operation.
-        self.revert_all(validate_only=True)
-        self.set_enabled(pack_id, False)
-        applied = self.apply_staged()
-
-        lib = self._load_library()
-        lib["packs"] = [item for item in lib.get("packs", [])
-                        if item.get("id") != pack_id]
-        lib.setdefault("enabled", {}).pop(pack_id, None)
-        if lib.get("active") == pack_id:
-            lib["active"] = None
-        self._save_library(lib)
-        shutil.rmtree(pack.dir, ignore_errors=False)
-        return {"removed": pack_id, "name": pack.name, "applied": applied}
+        previous = self.library_path.read_bytes()
+        applied = self.apply_enabled_changes({pack_id: False})
+        # Recoverable removal, consistent with ordinary mod archives. Never
+        # recursively delete a live pack after dropping its ownership record.
+        recovery = self.mods_root / 'removed-packages' / uuid.uuid4().hex / pack.id
+        moved = False
+        try:
+            recovery.parent.mkdir(parents=True, exist_ok=True)
+            pack.dir.rename(recovery)
+            moved = True
+            lib = self._load_library()
+            lib['packs'] = [item for item in lib.get('packs', []) if item.get('id') != pack_id]
+            lib.setdefault('enabled', {}).pop(pack_id, None)
+            if lib.get('active') == pack_id:
+                lib['active'] = None
+            self._save_library(lib)
+        except Exception as failure:
+            try:
+                if moved:
+                    recovery.rename(pack.dir)
+                self.library_path.write_bytes(previous)
+                self.apply_staged()
+            except Exception as repair:
+                raise PackError(f'Uninstall failed: {failure}. Recovery failed: {repair}. Keep all backups.') from failure
+            raise
+        return {'removed': pack_id, 'name': pack.name, 'applied': applied, 'recovery': str(recovery)}
 
     def rename_pack(self, pack_id: str, new_name: str) -> None:
         """Rename a library pack without changing its stable id or deployment."""

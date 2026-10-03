@@ -125,7 +125,7 @@ input:focus { border-color: var(--gold); box-shadow: 0 0 0 1px rgba(195,155,88,.
 .workspace.pack-mode .button-icon { margin-right: 7px; }
 .workspace.pack-mode .refresh { flex: 0 1 125px; min-width: 100px; font-size: 10px; letter-spacing: .7px; }
 .workspace.pack-mode .refresh span { margin-right: 5px; }
-.workspace.pack-mode .col-author { width: 180px; }
+.workspace.pack-mode .col-author { width: 13%; }
 .table-wrap { min-height: 0; margin: 0 8px 8px; border: 1px solid rgba(196,158,91,.26); border-radius: 4px; overflow: auto; position: relative; background: rgba(5,7,7,.42); }
 table { width: 100%; border-collapse: collapse; table-layout: fixed; }
 thead { position: sticky; top: 0; z-index: 1; background: rgba(8,10,10,.97); }
@@ -133,11 +133,13 @@ th { height: 35px; color: var(--gold-bright); font-size: 9px; letter-spacing: .8
 td { height: 43px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 0 10px; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 tr { transition: background .12s ease; }
 tbody tr:hover, tbody tr.selected { background: rgba(171,136,74,.07); }
-.col-enabled { width: 95px; text-align: center; }
-.col-version { width: 115px; text-align: center; }
-.col-author { width: 210px; }
-.col-targets { width: 100px; text-align: center; }
-.col-replaces { width: 235px; }
+.col-enabled { width: 68px; text-align: center; }
+.col-version { width: 72px; text-align: center; }
+.col-author { width: 16%; }
+.col-targets { width: 72px; text-align: center; }
+.col-replaces { width: 23%; }
+.col-status { width: 85px; font-size: 10px; text-align: center; color: var(--muted); }
+.col-status.was-updated { color: #e2c078; }
 .shared-replacement { color: #e2c078; cursor: help; }
 .shared-replacement > span:first-child { display: inline-block; max-width: calc(100% - 24px); overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
 .shared-marker { display: inline-grid; place-items: center; width: 18px; margin-left: 5px; color: #e7b64f; font-size: 13px; font-weight: 600; vertical-align: middle; }
@@ -202,7 +204,7 @@ dialog::backdrop { background: rgba(0,0,0,.68); }
   .game-row { grid-template-columns: minmax(225px, 1fr) 82px 82px 105px; gap: 5px; }
   .top-actions label { display: none; }
   .toolbar .button { min-width: 140px; }
-  .col-author { width: 180px; }
+  .col-author { width: 16%; }
 }
 
 @media (max-width: 980px) {

@@ -13,6 +13,7 @@ kept as a fallback for development/source checkouts missing the native tool.
 from __future__ import annotations
 
 import struct
+from io import BytesIO
 import subprocess
 import tempfile
 from pathlib import Path
@@ -205,6 +206,21 @@ def _dds_header(W: int, H: int, mips: int, fourcc: bytes) -> bytes:
     return bytes(b)
 
 
+def encode_sail_png(path: Path, slot_info) -> bytes:
+    """Convert an upright editable sail atlas to the game's bottom-up layout.
+
+    Transform before compression/mipmap generation, exactly once at import.
+    DDS files already contain game-oriented blocks and must bypass this path.
+    This changes image orientation, not mesh UVs or material metadata.
+    """
+    with Image.open(path) as source:
+        oriented = source.convert("RGBA").transpose(Image.Transpose.FLIP_TOP_BOTTOM)
+    with tempfile.TemporaryDirectory(prefix="animus_sail_orientation_") as temp:
+        prepared = Path(temp) / "sail.png"
+        oriented.save(prepared)
+        return encode_png_to_dds(prepared, slot_info)
+
+
 def encode_png_to_dds(path: Path, slot_info) -> bytes:
     """Encode a PNG into a DDS for the given slot family/size."""
     family = getattr(slot_info, "family", None)
@@ -247,7 +263,7 @@ def _texconv_path() -> Path:
             "directxtex" / "texconv.exe")
 
 
-def _encode_directxtex(path: Path, slot_info) -> bytes:
+def _encode_directxtex(path: Path, slot_info, mip_count: int = 0) -> bytes:
     """Encode a PNG to the slot's exact BC format, size, and colour space."""
     exe = _texconv_path()
     if not exe.is_file():
@@ -264,7 +280,7 @@ def _encode_directxtex(path: Path, slot_info) -> bytes:
         out_dir = Path(temp)
         args = [
             str(exe), "-nologo", "-y", "--ignore-srgb",
-            "-f", fmt, "-w", str(W), "-h", str(H), "-m", "0",
+            "-f", fmt, "-w", str(W), "-h", str(H), "-m", str(mip_count),
             "-if", "FANT", "-sepalpha", "-o", str(out_dir),
         ]
         # The editable PNG bytes are already gamma-encoded. Marking input and
@@ -307,3 +323,50 @@ def _encode_directxtex(path: Path, slot_info) -> bytes:
                 f"Texture encoder produced {out_w}x{out_h} DXGI {dxgi}; "
                 f"the game slot requires {W}x{H} DXGI {expected_dxgi}.")
         return data
+
+
+def encode_cannon_rgb(path: Path, slot_info, baseline_dds: bytes) -> bytes:
+    """Replace cannon colour while retaining each game mip's alpha data.
+
+    A flat opaque editor PNG must not overwrite this non-transparency channel.
+    Each level is encoded separately: deriving alpha from mip0, or multiplying
+    colour by near-zero alpha while filtering, would alter the game material.
+    Explicit DDS mods and other texture categories do not use this policy.
+    """
+    from dataclasses import replace
+    from .texture import parse_dds
+    levels, width, height, dxgi, _ = parse_dds(baseline_dds)
+    if (width, height) != (slot_info.W, slot_info.H) or not levels:
+        raise PngEncodeError("Cannon alpha baseline does not match the target texture")
+    if baseline_dds[84:88] != b"DX10":
+        raise PngEncodeError("Cannon alpha preservation requires a DX10 DDS baseline")
+    with Image.open(path) as source:
+        colour = source.convert("RGB")
+    chunks = []
+    with tempfile.TemporaryDirectory(prefix="animus_cannon_alpha_") as temp:
+        for mip in levels:
+            w, h = mip["w"], mip["h"]
+            if min(w, h) < 2:
+                chunks.append(mip["veri"])
+                continue
+            header = bytearray(baseline_dds[:148])
+            struct.pack_into("<I", header, 12, h)
+            struct.pack_into("<I", header, 16, w)
+            struct.pack_into("<I", header, 20, len(mip["veri"]))
+            struct.pack_into("<I", header, 28, 1)
+            # Alpha is linear data regardless of the RGB colour-space tag.
+            # Pillow does not recognize the BC1/BC3 sRGB enum variants.
+            struct.pack_into("<I", header, 128, {72: 71, 78: 77, 99: 98}.get(dxgi, dxgi))
+            with Image.open(BytesIO(bytes(header) + mip["veri"])) as original:
+                alpha = original.convert("RGBA").getchannel("A")
+            image = colour.resize((w, h), Image.Resampling.LANCZOS).convert("RGBA")
+            image.putalpha(alpha)
+            png = Path(temp) / f"mip-{mip['lvl']}.png"
+            image.save(png)
+            encoded = _encode_directxtex(png, replace(slot_info, W=w, H=h), mip_count=1)
+            output, out_w, out_h, out_dxgi, _ = parse_dds(encoded)
+            if ((out_w, out_h, out_dxgi) != (w, h, dxgi) or len(output) != 1
+                    or len(output[0]["veri"]) != len(mip["veri"])):
+                raise PngEncodeError("Cannon encoder output does not fit the original mip")
+            chunks.append(output[0]["veri"])
+    return baseline_dds[:148] + b"".join(chunks)

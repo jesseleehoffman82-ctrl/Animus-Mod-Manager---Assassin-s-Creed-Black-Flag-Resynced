@@ -134,16 +134,25 @@ def _find_embedded(res: bytes, data_start: int, data_end: int, tol: int = 64):
     Returns (marker_offset, pixel_start, length) or None.
     """
     ic_len = data_end - data_start
-    best = None
+    candidates = []
     for q in range(data_start, max(data_start, min(data_start + 4096, data_end - 4))):
         v = struct.unpack_from("<I", res, q)[0]
         if not (10000 < v < ic_len):
             continue
         end = q + 4 + v
         if end <= data_end and (data_end - end) <= tol:
-            if best is None or v > best[2]:
-                best = (q, q + 4, v)
-    return best
+            candidates.append((data_end - end, q, q + 4, v))
+    if not candidates:
+        return None
+    # Header integers can resemble lengths (e.g. 0x01000001 before a
+    # 4096x4096 BC7 pool). Choosing the largest value overwrites metadata.
+    # Prefer an exact end anchor, never the largest apparent allocation.
+    candidates.sort()
+    nearest = candidates[0][0]
+    best = [c for c in candidates if c[0] == nearest]
+    if len(best) != 1:
+        raise ValueError("ambiguous embedded texture pool boundary")
+    return best[0][1:]
 
 
 def _layout(W: int, H: int, block: int, first_level: int, length: int):
@@ -252,7 +261,10 @@ def plan_texture(archive: ForgeArchive, mat: int, slot: int, dds: bytes,
     # Embedded tail (append-and-repoint).
     data_start = slot_info.hdr + 14
     data_end = slots[slot + 1][0] if slot + 1 < len(slots) else len(res)
-    c = _find_embedded(res, data_start, data_end)
+    standalone = slot_info.tex == mat and len(slots) == 1
+    c = _find_embedded(res, data_start, data_end, tol=0 if standalone else 64)
+    if standalone and not c and len(external) < slot_info.mipcount:
+        raise ValueError("standalone texture has no exact embedded pool boundary; nothing was patched")
     embedded = None
     if c:
         marker_off, pixel_start, length = c

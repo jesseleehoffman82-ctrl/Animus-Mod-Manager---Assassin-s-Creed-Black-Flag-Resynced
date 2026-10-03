@@ -146,6 +146,15 @@ function render() {
   renderTable();
 }
 
+function updateStatusCell(row) {
+  const deployment = row.deployment_pending ? "Not deployed" : row.enabled ? "Enabled" : "Disabled";
+  const label = row.updated_at ? "Updated" : deployment;
+  const details = row.updated_at
+    ? `Updated ${new Date(row.updated_at).toLocaleString()}\n${row.previous_version || 'Unknown'} → ${row.updated_version || 'Unknown'}\n${deployment}`
+    : deployment;
+  return `<td class="col-status ${row.updated_at ? 'was-updated' : ''}" title="${escapeHtml(details)}">${escapeHtml(label)}</td>`;
+}
+
 function renderTable() {
   const isMods = app.tab === "mods";
   const isOutfits = app.tab === "outfits";
@@ -154,8 +163,8 @@ function renderTable() {
   const isVanillaReplacement = isOutfits || isCrew || isSails;
   const replacementKind = isSails ? "sail" : isCrew ? "crew texture" : "outfit";
   $("#table-head").innerHTML = isMods
-    ? `<tr><th class="col-enabled">ENABLED</th><th>MOD</th><th class="col-version">VERSION</th><th class="col-author">AUTHOR</th><th class="col-targets">TARGETS</th><th class="col-menu"></th></tr>`
-    : `<tr><th class="col-enabled">ENABLED</th><th>${isOutfits ? "OUTFIT MOD" : app.tab === "weapons" ? "WEAPON SKIN" : isCrew ? "CREW TEXTURE" : "SAIL DESIGN"}</th><th class="col-author">AUTHOR</th><th class="${isVanillaReplacement ? "col-replaces" : "col-targets"}">${isOutfits ? "REPLACES VANILLA OUTFIT" : isCrew ? "REPLACES VANILLA CREW" : isSails ? "REPLACES VANILLA SAIL" : "TEXTURE SLOTS"}</th><th class="col-menu"></th></tr>`;
+    ? `<tr><th class="col-enabled">ENABLED</th><th>MOD</th><th class="col-version">VERSION</th><th class="col-author">AUTHOR</th><th class="col-targets">TARGETS</th><th class="col-status">STATUS</th><th class="col-menu"></th></tr>`
+    : `<tr><th class="col-enabled">ENABLED</th><th>${isOutfits ? "OUTFIT MOD" : app.tab === "weapons" ? "WEAPON SKIN" : isCrew ? "CREW TEXTURE" : "SAIL DESIGN"}</th><th class="col-version">VERSION</th><th class="col-author">AUTHOR</th><th class="${isVanillaReplacement ? "col-replaces" : "col-targets"}">${isOutfits ? "REPLACES VANILLA OUTFIT" : isCrew ? "REPLACES VANILLA CREW" : isSails ? "REPLACES VANILLA SAIL" : "TEXTURE SLOTS"}</th><th class="col-status">STATUS</th><th class="col-menu"></th></tr>`;
 
   const rows = currentRows();
   const replacementOwners = new Map();
@@ -179,11 +188,12 @@ function renderTable() {
     const enabled = row.enabled ? "on" : "";
     const glyph = `<img src="assets/resynced-insignia.png" alt="">`;
     if (isMods) return `<tr class="${selected}" data-key="${escapeHtml(key)}" title="${rowTooltip(row)}">
-      <td class="col-enabled"><button class="toggle ${enabled}" data-toggle="${escapeHtml(key)}">${row.enabled ? "✓" : "−"}</button></td>
+      <td class="col-enabled"><button class="toggle ${enabled}" data-toggle="${escapeHtml(key)}" title="${row.deployment_pending ? 'Not deployed. Enable to apply the installed files.' : row.enabled ? 'Disable' : 'Enable'}">${row.enabled ? "✓" : "−"}</button></td>
       <td><span class="mod-name"><span class="mod-glyph">${glyph}</span><span class="mod-title">${escapeHtml(row.name)}</span></span></td>
-      <td class="col-version">${escapeHtml(row.version || "—")}</td>
+      <td class="col-version" title="${escapeHtml(row.version || 'Version not supplied by author')}">${escapeHtml(row.version || "Unknown")}</td>
       <td class="col-author">${escapeHtml(row.author || "—")}</td>
       <td class="col-targets">${escapeHtml(row.targets ?? 0)}</td>
+      ${updateStatusCell(row)}
       <td class="col-menu"><button class="menu-button" data-menu="${escapeHtml(key)}">•••</button></td>
     </tr>`;
     const replacements = isVanillaReplacement && Array.isArray(row.replaces)
@@ -211,10 +221,12 @@ function renderTable() {
       ? `<td class="col-replaces ${sharedWith.length ? "shared-replacement" : ""}" title="${escapeHtml(replacementTitle)}"><span>${escapeHtml(replacementText)}</span>${sharedWith.length ? `<span class="shared-marker" aria-label="Shared ${replacementKind} slot">⇄</span>` : ""}</td>`
       : `<td class="col-targets">${escapeHtml(row.slots ?? 0)}</td>`;
     return `<tr class="${selected}" data-key="${escapeHtml(key)}" title="${rowTooltip(row)}">
-      <td class="col-enabled"><button class="toggle ${enabled}" data-toggle="${escapeHtml(key)}" ${app.packBusy ? "disabled" : ""}>${row.enabled ? "✓" : "−"}</button></td>
+      <td class="col-enabled"><button class="toggle ${enabled}" data-toggle="${escapeHtml(key)}" title="${row.deployment_pending ? 'Not deployed. Enable to apply the installed files.' : row.enabled ? 'Disable' : 'Enable'}" ${app.packBusy ? "disabled" : ""}>${app.packBusy ? '…' : row.enabled ? "✓" : "−"}</button></td>
       <td><span class="mod-name"><span class="mod-glyph">${glyph}</span><span class="mod-title">${escapeHtml(row.name)}</span></span></td>
+      <td class="col-version" title="${escapeHtml(row.version || 'Version not supplied by author')}">${escapeHtml(row.version || "Unknown")}</td>
       <td class="col-author">${escapeHtml(row.author || "—")}</td>
       ${replacementCell}
+      ${updateStatusCell(row)}
       <td class="col-menu"><button class="menu-button" data-menu="${escapeHtml(key)}">•••</button></td>
     </tr>`;
   }).join("");
@@ -286,6 +298,7 @@ function setTab(tab) {
 }
 
 async function toggleRow(key) {
+  if (app.packBusy) return;
   const row = currentRows().find(item => (item.name || item.id) === key);
   if (!row) return;
   if (isFileModRow(row)) await call("toggle_mod", row.id || row.name);
@@ -293,9 +306,7 @@ async function toggleRow(key) {
     if (app.packBusy) return;
     const previousEnabled = row.enabled;
     const requestedEnabled = !previousEnabled;
-    // Reflect the user's choice immediately. Rebuilding the FORGE can take a
-    // moment, but the interface should never feel as though the click failed.
-    row.enabled = requestedEnabled;
+    // Show progress, not a successful checkmark before deployment completes.
     app.packBusy = true;
     render();
     try {
@@ -503,11 +514,19 @@ $("#context-menu").onclick = async event => {
   const action = event.target.closest("[data-action]")?.dataset.action;
   const name = app.menuTarget; hideMenu(); if (!action || !name) return;
   if (action === "update") {
+    if (app.packBusy) return;
     const row = currentRows().find(item => (item.name || item.id) === name);
     const itemType = itemTypeForRow(row);
     const itemId = row?.id || name;
-    if (itemId) await call("update_item", itemType, itemId);
-    await refresh();
+    app.packBusy = true;
+    renderTable();
+    try {
+      if (itemId) await call("update_item", itemType, itemId);
+      await refresh();
+    } finally {
+      app.packBusy = false;
+      renderTable();
+    }
   }
   if (action === "rename") {
     const row = currentRows().find(item => (item.name || item.id) === name);

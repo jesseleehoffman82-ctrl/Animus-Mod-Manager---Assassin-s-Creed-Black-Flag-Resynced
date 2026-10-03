@@ -31,10 +31,10 @@ class CrewMaterialTests(unittest.TestCase):
         self.forge.return_value.read_raw.return_value = b"stock-resource"
         self.dest = self.game / crew_patch.PATCH_FILE
 
-    def package(self, name="Rugged test", payload=b"scimitar-fixture", digest=None):
+    def package(self, name="Rugged test", payload=b"scimitar-fixture", digest=None, version="1.0"):
         result = self.root / (name.replace(" ", "-") + ".jmod")
         manifest = dict(format="jackdaw-mod-v1", game="AC4BF-Resynced", name=name,
-                        version="1.0", author="test", category="loose-file",
+                        version=version, author="test", category="loose-file",
                         crew_patch=dict(target_id="rugged-rags", target_name="Rugged Rags",
                           source_resources=[dict(id="123", archive="DataPC_boot.forge",
                             raw_sha256=digest or hashlib.sha256(b"stock-resource").hexdigest())]),
@@ -94,10 +94,18 @@ class CrewMaterialTests(unittest.TestCase):
         self.rpc._install_crew_material(self.package())
         self.rpc.dispatch("rename_item", ["mod", "Rugged test", "My crew"])
         self.rpc.dispatch("toggle_mod", ["My crew"])
-        self.rpc.dispatch("update_mod_path", ["My crew", str(self.package("New recolor", b"scimitar-new"))])
+        replacement = self.package("New recolor", b"scimitar-new", version="2.0")
+        preview, _ = self.rpc.dispatch("preview_update", ["mod", "My crew", str(replacement)])
+        self.assertEqual(preview["previous_version"], "1.0")
+        self.assertEqual(preview["version"], "2.0")
+        self.assertFalse(self.dest.exists())
+        self.rpc.dispatch("update_mod_path", ["My crew", str(replacement)])
         row = self.rpc.state()["crew"][0]
         self.assertEqual(row["name"], "My crew")
         self.assertFalse(row["enabled"])
+        self.assertEqual(row["version"], "2.0")
+        self.assertEqual(row["previous_version"], "1.0")
+        self.assertTrue(row["updated_at"])
         self.assertFalse(self.dest.exists())
         self.rpc.dispatch("toggle_mod", ["My crew"])
         self.assertEqual(self.dest.read_bytes(), b"scimitar-new")

@@ -67,9 +67,17 @@ is not required for this portable review package.
 
 Run every offline regression with:
 
-    Get-ChildItem tools/test_*.py | ForEach-Object { py -3.14 $_.FullName; if ($LASTEXITCODE) { throw "Test failed: $_" } }
+    py -3.14 tools/run_regressions.py
 
-The tests use synthetic game data; do not launch the real game as part of building.
+The ten test suites use temporary synthetic game data and preserve existing
+fixtures and user libraries; do not launch the real game as part of building.
+The compiled startup-path regression can be run after publishing the host:
+
+    $testArtifacts = Join-Path ([IO.Path]::GetTempPath()) ('animus-startup-build-' + [Guid]::NewGuid().ToString('N'))
+    dotnet run --project tools/startup_tests/StartupTests.csproj --artifacts-path $testArtifacts -- ./release/Animus-Mod-Manager-0.1.7-beta-win-x64/AnimusModManager.dll
+
+The external temporary build path keeps the test's synthetic frontend separate
+from the real application. The test does not open the UI or launch the game.
 Build outputs can vary with SDK/toolchain versions; compare the authored source
 and runtime behavior as well as the supplied release hashes.
 

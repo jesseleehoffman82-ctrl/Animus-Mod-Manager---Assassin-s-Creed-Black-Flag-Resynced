@@ -27,8 +27,8 @@ def game_process_running(executable_name: str = "ACBlackFlag.exe") -> bool:
     return executable_name.casefold() in result.stdout.casefold()
 
 
-def wait_for_game_start(executable_name: str, timeout: float = 12.0) -> bool:
-    """Wait for the game to appear and remain alive long enough to be usable."""
+def wait_for_game_start(executable_name: str, timeout: float = 45.0) -> bool:
+    """Observe a stable game process; this does not prove gameplay is ready."""
     deadline = time.monotonic() + timeout
     first_seen: float | None = None
     while time.monotonic() < deadline:
@@ -130,8 +130,10 @@ def launch_game(game_dir: Path) -> str:
         )
         if not wait_for_game_start(executable.name):
             raise RuntimeError(
-                "Black Flag exited during startup. A DLL/ASI mod may be incompatible "
-                "with the current Resynced game build; disable recently updated code mods and try again."
+                "Black Flag did not remain running within the startup check. "
+                "Check Steam and Ubisoft Connect for setup or sign-in prompts. "
+                "If the game opened and then closed, a DLL/ASI mod may be incompatible "
+                "with the current Resynced game build."
             )
         return "steam"
 
@@ -139,8 +141,10 @@ def launch_game(game_dir: Path) -> str:
         os.startfile(f"steam://run/{app_id}")  # type: ignore[attr-defined]
         if not wait_for_game_start(executable.name):
             raise RuntimeError(
-                "Black Flag exited during startup. A DLL/ASI mod may be incompatible "
-                "with the current Resynced game build; disable recently updated code mods and try again."
+                "Black Flag did not remain running within the startup check. "
+                "Check Steam and Ubisoft Connect for setup or sign-in prompts. "
+                "If the game opened and then closed, a DLL/ASI mod may be incompatible "
+                "with the current Resynced game build."
             )
         return "steam"
 

@@ -54,6 +54,11 @@ Copy-Item -Path (Join-Path $projectRoot "tools\Animus_loader\web\icons\*") `
 Copy-Item -LiteralPath (Join-Path $projectRoot "tools\requirements.txt") -Destination (Join-Path $stage "tools")
 Get-ChildItem -LiteralPath (Join-Path $projectRoot "tools") -File -Filter "test_*.py" |
     Copy-Item -Destination (Join-Path $stage "tools")
+Copy-Item -LiteralPath (Join-Path $projectRoot "tools\run_regressions.py") -Destination (Join-Path $stage "tools")
+Copy-Item -LiteralPath (Join-Path $projectRoot "tools\audit_release.py") -Destination (Join-Path $stage "tools")
+New-Item -ItemType Directory -Force -Path (Join-Path $stage "tools\startup_tests") | Out-Null
+Copy-Item -LiteralPath (Join-Path $projectRoot "tools\startup_tests\StartupTests.csproj") -Destination (Join-Path $stage "tools\startup_tests")
+Copy-Item -LiteralPath (Join-Path $projectRoot "tools\startup_tests\Program.cs") -Destination (Join-Path $stage "tools\startup_tests")
 
 foreach ($document in @(
     "CHANGELOG.md",
@@ -63,6 +68,7 @@ foreach ($document in @(
     "sign-release.ps1",
     "SOURCE-CODE.txt",
     "REVIEW-NOTES.md",
+    "VALIDATION-2026-09-14.md",
     "GAME-COMPATIBILITY.md",
     "PUBLIC-BETA-README.md",
     "NEXUS-PORTABLE-README.md",

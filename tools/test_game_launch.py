@@ -67,8 +67,33 @@ def test_reports_failed_steam_start_instead_of_false_success() -> None:
                 launch_game(game)
             except RuntimeError as exc:
                 assert "DLL/ASI mod may be incompatible" in str(exc)
+                assert "Check Steam and Ubisoft Connect" in str(exc)
+                assert "exited during startup" not in str(exc)
             else:
                 raise AssertionError("A failed Steam launch was reported as successful")
+
+
+def test_already_running_does_not_launch_duplicate() -> None:
+    with tempfile.TemporaryDirectory() as raw:
+        game = _game_tree(Path(raw))
+        with mock.patch("Animus_loader.game_launch.game_process_running", return_value=True), \
+                mock.patch("Animus_loader.game_launch.subprocess.Popen") as popen:
+            assert launch_game(game) == "already-running"
+            popen.assert_not_called()
+
+
+def test_external_steam_library_uses_steam_uri() -> None:
+    with tempfile.TemporaryDirectory() as raw:
+        game = _game_tree(Path(raw))
+        with mock.patch("Animus_loader.game_launch.steam_executable", return_value=None), \
+                mock.patch("Animus_loader.game_launch.os.name", "nt"), \
+                mock.patch("Animus_loader.game_launch.os.startfile", create=True) as startfile, \
+                mock.patch("Animus_loader.game_launch.game_process_running", return_value=False), \
+                mock.patch("Animus_loader.game_launch.wait_for_game_start", return_value=True), \
+                mock.patch("Animus_loader.game_launch.subprocess.Popen") as popen:
+            assert launch_game(game) == "steam"
+            startfile.assert_called_once_with("steam://run/3751950")
+            popen.assert_not_called()
 
 
 if __name__ == "__main__":
@@ -77,4 +102,6 @@ if __name__ == "__main__":
     test_steam_build_launches_through_steam()
     test_non_steam_build_keeps_direct_launch_fallback()
     test_reports_failed_steam_start_instead_of_false_success()
+    test_already_running_does_not_launch_duplicate()
+    test_external_steam_library_uses_steam_uri()
     print("game launch tests passed")

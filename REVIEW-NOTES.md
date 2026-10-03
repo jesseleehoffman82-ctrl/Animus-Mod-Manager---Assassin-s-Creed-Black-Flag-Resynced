@@ -1,4 +1,4 @@
-# 0.1.7 beta review refresh — 2026-09-05
+# 0.1.7 beta review refresh — 2026-09-14
 
 This is a local review build, not a Nexus approval or antivirus guarantee.
 Compatibility target: game Title Update 1.0.7 (Steam build 24833802); application version: 0.1.7 beta.
@@ -8,6 +8,14 @@ inside the application identifies every shipped file; adjacent .sha256 files
 identify the archives supplied for review.
 
 ## Changes
+
+- Weapons category validation rejects outfit/unknown packs before import.
+- Native-manifest ZIP imports remain visible after refresh/relaunch.
+- Startup selects the executable's own application folder before a shortcut's
+  working directory, preserving the intended installation's library.
+- Fixed-target crew packages support journaled appended resources with removal
+  ownership checks and rollback testing. No crew mod payload is bundled.
+- Run `py -3.14 tools/run_regressions.py` for the ten offline regression suites.
 
 - No Nexus account, API key, GraphQL, OAuth, SSO or download integration is included.
 - WebView navigation and native messages are restricted to the local interface;

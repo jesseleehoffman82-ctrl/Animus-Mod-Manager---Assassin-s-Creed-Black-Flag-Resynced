@@ -88,6 +88,62 @@ internal sealed class LaunchOverlayForm : Form
     }
 }
 
+internal sealed class UpdatePromptForm : Form
+{
+    public UpdatePromptForm(JsonObject preview)
+    {
+        Text = "Update mod";
+        FormBorderStyle = FormBorderStyle.None;
+        StartPosition = FormStartPosition.CenterParent;
+        ShowInTaskbar = false;
+        AutoScaleMode = AutoScaleMode.Dpi;
+        BackColor = Color.FromArgb(9, 11, 11);
+        ForeColor = Color.FromArgb(232, 229, 222);
+        ClientSize = new Size(560, 320);
+        HandleCreated += (_, _) => NativeMethods.UseSmallRoundedCorners(Handle);
+        var title = new Label { Text = "UPDATE MOD", Font = new Font("Segoe UI Semibold", 11),
+            ForeColor = Color.FromArgb(224, 188, 116), BackColor = Color.FromArgb(16, 18, 18),
+            TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(20, 0, 0, 0),
+            Bounds = new Rectangle(1, 1, 558, 48) };
+        title.MouseDown += (_, e) => {
+            if (e.Button != MouseButtons.Left) return;
+            NativeMethods.ReleaseCapture();
+            NativeMethods.SendMessage(Handle, 0xA1, (IntPtr)0x2, IntPtr.Zero);
+        };
+        var oldVersion = preview["previous_version"]?.GetValue<string>() ?? "Unknown";
+        var newVersion = preview["version"]?.GetValue<string>() ?? "Unknown";
+        var name = preview["name"]?.GetValue<string>() ?? "Mod";
+        var incoming = preview["incoming_name"]?.GetValue<string>() ?? name;
+        var details = new TextBox { Multiline = true, ReadOnly = true, BorderStyle = BorderStyle.None,
+            BackColor = BackColor, ForeColor = ForeColor, Font = new Font("Segoe UI", 10),
+            ScrollBars = ScrollBars.Vertical, Bounds = new Rectangle(24, 68, 512, 122),
+            Text = $"{name}\r\n\r\nVersion: {oldVersion}  →  {newVersion}\r\n\r\nReplacement: {incoming}" };
+        var note = new Label { Bounds = new Rectangle(24, 199, 512, 47), Font = new Font("Segoe UI", 9),
+            ForeColor = Color.FromArgb(168, 166, 160),
+            Text = oldVersion == "Unknown" || newVersion == "Unknown"
+                ? "Version information is missing from one of the packages. Replace the installed copy with the selected archive?"
+                : oldVersion == newVersion ? "The version is unchanged. Reinstall using the selected archive?"
+                : "Replace the installed copy with the selected archive?" };
+        Button MakeButton(string text, int x, DialogResult result) {
+            var button = new Button { Text = text, Bounds = new Rectangle(x, 260, 120, 36),
+                DialogResult = result, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(25, 23, 17),
+                ForeColor = Color.FromArgb(224, 188, 116), Font = new Font("Segoe UI Semibold", 9) };
+            button.FlatAppearance.BorderColor = Color.FromArgb(183, 139, 70);
+            return button;
+        }
+        var cancel = MakeButton("CANCEL", 282, DialogResult.Cancel);
+        var confirm = MakeButton("UPDATE", 416, DialogResult.OK);
+        CancelButton = cancel;
+        AcceptButton = confirm;
+        Controls.AddRange([title, details, note, cancel, confirm]);
+    }
+    protected override void OnPaint(PaintEventArgs e) {
+        base.OnPaint(e);
+        using var pen = new Pen(Color.FromArgb(183, 139, 70));
+        e.Graphics.DrawRectangle(pen, 0, 0, ClientSize.Width - 1, ClientSize.Height - 1);
+    }
+}
+
 internal sealed class ConflictPromptForm : Form
 {
     private static readonly Color Surface = Color.FromArgb(9, 11, 11);
@@ -609,10 +665,30 @@ internal sealed class MainForm : Form
                     await PostResponse(id, new JsonObject { ["result"] = null });
                     return;
                 }
+                string? cannonSet = null;
+                if (itemType == "general") {
+                    var choices = await RunPython("get_cannon_targets", [dialog.FileName, itemId]);
+                    if (choices["error"] is not null) throw new InvalidOperationException(choices["error"]!.GetValue<string>());
+                    if (choices["result"] is JsonObject cannonResult && cannonResult["targets"] is JsonArray cannonTargets && cannonTargets.Count > 0) {
+                        cannonSet = ChooseCannonSet(cannonResult);
+                        if (cannonSet is null) { await PostResponse(id, new JsonObject { ["result"] = null }); return; }
+                    }
+                }
+                var previewPayload = await RunPython("preview_update", [itemType, itemId, dialog.FileName, cannonSet]);
+                if (previewPayload["error"] is not null) {
+                    previewPayload["id"] = id;
+                    await PostJson(previewPayload.ToJsonString());
+                    return;
+                }
+                using var prompt = new UpdatePromptForm(previewPayload["result"] as JsonObject ?? new JsonObject());
+                if (prompt.ShowDialog(this) != DialogResult.OK) {
+                    await PostResponse(id, new JsonObject { ["result"] = null });
+                    return;
+                }
                 rpcMethod = isMod ? "update_mod_path" : "update_pack_path";
                 rpcArgs = isMod
                     ? [itemId, dialog.FileName]
-                    : [itemType, itemId, dialog.FileName];
+                    : [itemType, itemId, dialog.FileName, cannonSet];
             }
             else if (method == "launch_game")
             {
@@ -621,6 +697,12 @@ internal sealed class MainForm : Form
             }
 
             var payload = await RunPython(rpcMethod, rpcArgs);
+            if (method == "install_mod" && payload["error"] is null &&
+                payload["result"] is JsonObject cannonInstall && cannonInstall["requires_cannon_target"]?.GetValue<bool>() == true) {
+                var selectedSet = ChooseCannonSet(cannonInstall);
+                if (selectedSet is null) { await PostResponse(id, new JsonObject { ["result"] = null }); return; }
+                payload = await RunPython("install_mod_path", [rpcArgs[0]?.GetValue<string>() ?? "", selectedSet]);
+            }
             if ((method == "install_pack" || method == "install_mod" || method == "toggle_pack") && payload["error"] is null &&
                 payload["result"] is JsonObject installResult &&
                 installResult["requires_confirmation"]?.GetValue<bool>() == true)
@@ -659,6 +741,16 @@ internal sealed class MainForm : Form
         {
             await PostResponse(id, new JsonObject { ["error"] = ex.Message });
         }
+    }
+
+    private string? ChooseCannonSet(JsonObject choices)
+    {
+        using var prompt = new ReplacementTargetPromptForm(
+            choices["targets"] as JsonArray ?? [], choices["default_id"]?.GetValue<string>() ?? "silver",
+            "CHOOSE CANNON SET", "Choose the weapon finish currently equipped on your Jackdaw.",
+            "Applies the supplied designs to that set's cannons, mortars and swivel guns. Standard/base textures may also be shared by NPC ships. This does not purchase or equip upgrades.",
+            "USE THIS SET");
+        return prompt.ShowDialog(this) == DialogResult.OK ? prompt.SelectedTargetId : null;
     }
 
     private bool IsTrustedInterface(string source)
@@ -891,11 +983,13 @@ internal static class Program
         var candidates = new List<string>();
         if (args.Length > 0 && !string.IsNullOrWhiteSpace(args[0]))
             candidates.Add(args[0]);
-        candidates.Add(Directory.GetCurrentDirectory());
-
         var cursor = new DirectoryInfo(AppContext.BaseDirectory);
         for (var depth = 0; cursor is not null && depth < 10; depth++, cursor = cursor.Parent)
             candidates.Add(cursor.FullName);
+        // A shortcut's working directory may belong to an older installation.
+        // Prefer the executable's own frontend/library unless explicitly given
+        // a development root on the command line.
+        candidates.Add(Directory.GetCurrentDirectory());
 
         foreach (var candidate in candidates)
         {

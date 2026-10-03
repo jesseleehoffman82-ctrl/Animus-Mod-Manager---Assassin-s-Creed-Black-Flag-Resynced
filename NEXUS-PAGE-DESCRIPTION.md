@@ -1,18 +1,19 @@
 # Animus Mod & Outfit Manager
 
-## Mods, outfits, weapons and crew textures in one manager
+## Mods, outfits, weapons, crew and sails in one manager
 
 **Animus Mod & Outfit Manager** is a portable mod-management tool built specifically
 for **Assassin's Creed IV: Black Flag Resynced**. It provides one place to
 install and manage general mods, outfit replacements, weapon skins and custom
-crew textures—with reversible deployment, backups and outfit-slot conflict
+crew textures and sail designs—with reversible deployment, backups and outfit-slot conflict
 detection.
 
 This project was created because Black Flag's growing mod scene needed a
 dedicated manager, especially for players who use several outfit replacements
 and do not want to depend on Outfit Workshop for installation.
 
-> **Public beta:** Version 0.1.5 Beta is an early testing release. Keep the
+> **Public beta:** Version 0.1.7 Beta (September 14 refresh) targets Resynced
+> Title Update 1.0.7. Keep the
 > game closed while Animus is changing files, retain the included backup
 > folders and report any failed installation with the activity-log text.
 
@@ -20,7 +21,12 @@ and do not want to depend on Outfit Workshop for installation.
 
 ## Main features
 
-- Dedicated **Mods**, **Outfits**, **Weapons** and **Crew** libraries.
+- Dedicated **Mods**, **Outfits**, **Weapons**, **Crew** and **Sails** libraries.
+- Weapons accepts identified weapon replacements, such as swords, pistols and
+  blunderbusses; outfit and unidentified packs are rejected before import.
+- Choose from ten main sail cosmetic targets and preserve the choice on update.
+- Crew supports automatic named-pack detection or a selected vanilla texture;
+  fixed-target material packages retain the destination specified by their author.
 - Persistent enable/disable state across manager restarts.
 - Installs supported ordinary ZIP mods even when `manifest.json` is not
   supplied, provided the archive has a layout Animus can identify safely.
@@ -104,10 +110,9 @@ changes are deployed.
 5. Keep the game closed while installing, enabling, disabling, updating,
    removing or restoring files.
 
-The download is portable and includes its required Python and .NET runtimes.
-Users do not need to install Python or the .NET SDK. Microsoft Edge WebView2
-Runtime is required and is normally present on supported Windows 10/11
-systems.
+The download is portable and includes Python. **Microsoft .NET 10 Desktop
+Runtime x64** and **Microsoft Edge WebView2 Runtime** are required separately.
+Users do not need to install Python or the .NET SDK.
 
 The archive is larger than a simple script because those portable runtimes are
 included deliberately.
@@ -123,7 +128,7 @@ or `.zip` archive. Animus uses a package manifest when one is provided and can
 import supported ordinary loose-file archives when their destination can
 be inferred safely.
 
-### Outfits, weapons and crew textures
+### Outfits, weapons, crew textures and sails
 
 Open the relevant category, select its install button and choose the downloaded
 archive or texture. Animus supports ZIP, RAR, 7Z and common texture-pack forms.

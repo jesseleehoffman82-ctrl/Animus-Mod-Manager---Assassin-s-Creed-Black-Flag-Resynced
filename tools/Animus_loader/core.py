@@ -298,7 +298,9 @@ class Loader:
                 names = {item.filename.replace("\\", "/") for item in archive.infolist()}
                 if "manifest.json" in names:
                     package = self.read_package(source)
-                    target = self.packages_dir / source.name
+                    # Discovery scans .jmod files. Native manifests may arrive
+                    # in ordinary ZIPs; keep them visible after refresh/relaunch.
+                    target = self.packages_dir / (source.stem + ".jmod")
                     if source.resolve() != target.resolve():
                         shutil.copy2(source, target)
                     return target, package, False
@@ -446,7 +448,7 @@ class Loader:
     @staticmethod
     def _loose_archive_metadata(fallback: str, readme: str) -> tuple[str, str]:
         name = fallback
-        version = "1.0"
+        version = "Unknown"
         # Download-service filenames commonly end with:
         #   <mod id> <version> <UTC timestamp> <download token>
         # Remove that transport metadata before showing the package in the UI.
@@ -536,7 +538,7 @@ class Loader:
         if manifest.get("game") != GAME:
             raise LoaderError("Unsupported game in manifest")
         name = manifest.get("name") or "Untitled"
-        version = manifest.get("version") or "0.0.0"
+        version = str(manifest.get("version") or "Unknown")
         author = manifest.get("author") or "unknown"
         for label, value in (("name", name), ("version", version)):
             if not isinstance(value, str) or any(c in value for c in '\\/:*?"<>|') or any(ord(c) < 32 for c in value):
@@ -799,6 +801,49 @@ class Loader:
             return self._apply_byte_patch(pkg, target)
         if target.mode == "loose-file":
             return self._apply_loose_file(pkg, target)
+        if target.mode == "appended-resource":
+            if not target.replacement:
+                raise LoaderError(f"{pkg.name}: target has an empty replacement resource")
+            from .forge import ForgeArchive, Oodle
+            forge_path = self.game_dir / target.forge
+            if not forge_path.is_file():
+                raise LoaderError(f"{pkg.name}: forge not found at {forge_path}")
+            archive = ForgeArchive(forge_path, Oodle(self.game_dir))
+            if not archive.has(target.resource_id):
+                raise LoaderError(
+                    f"{pkg.name}: resource 0x{target.resource_id:016X} not found in {target.forge}"
+                )
+            original_offset, original_length, _ = archive.offset_of(target.resource_id)
+            original = archive.read_raw(target.resource_id)
+            if target.expected_original_size is not None and len(original) != target.expected_original_size:
+                raise LoaderError(
+                    f"{pkg.name}: resource 0x{target.resource_id:016X} size mismatch"
+                )
+            if target.expected_original_sha256:
+                found = hashlib.sha256(original).hexdigest()
+                if found != target.expected_original_sha256:
+                    raise LoaderError(
+                        f"{pkg.name}: original sha256 mismatch for resource "
+                        f"0x{target.resource_id:016X}"
+                    )
+            new_offset = archive.append_block(target.replacement)
+            try:
+                archive.repoint_toc(target.resource_id, new_offset, len(target.replacement))
+            except Exception:
+                archive.truncate(new_offset)
+                raise
+            return {
+                "mode": "appended-resource",
+                "forge": target.forge,
+                "resource_id": f"0x{target.resource_id:016X}",
+                "original_offset": original_offset,
+                "original_length": original_length,
+                "installed_offset": new_offset,
+                "installed_length": len(target.replacement),
+                "installed_sha256": hashlib.sha256(target.replacement).hexdigest(),
+                "backup": None,
+                "original_hex": None,
+            }
         if target.mode != "decoded-resource":
             raise LoaderError(
                 f"Unsupported install mode for {pkg.name}: {target.mode}"
@@ -1393,7 +1438,68 @@ class Loader:
         self._save_state(records)
         return backups
 
-    def remove(self, name: str) -> list[Path]:
+    def remove(self, name: str, *, keep_disabled: bool = False) -> list[Path]:
+        """Validate all targets, then remove with disk-backed rollback on failure."""
+        from .removal_transaction import RemovalTransaction
+        records = self._load_state()
+        record = next((r for r in records if r.name == name), None)
+        if record is None:
+            return []
+        # Do not discover a conflict only after restoring an earlier file.
+        for entry in record.backups:
+            if entry.get('mode') != 'loose-file' or entry.get('shared'):
+                continue
+            target = self.game_dir / str(entry.get('dest', ''))
+            expected = entry.get('installed_sha256')
+            if target.is_file() and expected and sha256_file(target) != expected:
+                raise LoaderError(f"Cannot safely remove '{name}': {entry['dest']} was changed by another tool.")
+            if entry.get('backup') and not Path(entry['backup']).is_file() and not entry.get('original_hex'):
+                raise LoaderError(f"Cannot safely remove '{name}': original backup missing for {entry['dest']}.")
+        transaction = RemovalTransaction(self.mods_root / 'removal-recovery')
+        try:
+            transaction.capture(self.state_path)
+            for entry in record.backups:
+                mode = entry.get('mode')
+                if mode == 'loose-file':
+                    if entry.get('shared'):
+                        continue
+                    transaction.capture(self.game_dir / entry['dest'])
+                    if entry.get('external_chain_hook'):
+                        transaction.capture(self.game_dir / entry['external_chain_hook'])
+                elif mode == 'appended-resource':
+                    from .forge import ForgeArchive, Oodle
+                    path = self.game_dir / entry['forge']
+                    archive = ForgeArchive(path, Oodle(self.game_dir))
+                    transaction.capture(path, archive.toc_entry_offset(int(str(entry['resource_id']), 0)), 24)
+                    transaction.capture(path, int(entry['installed_offset']), int(entry['installed_length']))
+                else:
+                    path = self.game_dir / entry.get('forge', '')
+                    original = Path(entry['backup']).read_bytes() if entry.get('backup') and Path(entry['backup']).is_file() else bytes.fromhex(entry.get('original_hex') or '')
+                    if not path.is_file() or not original:
+                        raise LoaderError(f"Cannot safely remove '{name}': archive or restore data missing.")
+                    transaction.capture(path, int(entry['offset']), len(original))
+        except Exception:
+            transaction.close()
+            raise
+        try:
+            result = self._remove_impl(name)
+            if keep_disabled:
+                record.enabled = False
+                record.backups = []
+                remaining = self._load_state()
+                remaining.append(record)
+                self._save_state(remaining)
+        except Exception as failure:
+            try:
+                transaction.rollback()
+            except Exception as recovery:
+                raise LoaderError(f'Removal failed: {failure}. {recovery}') from failure
+            transaction.close()
+            raise
+        transaction.close()
+        return result
+
+    def _remove_impl(self, name: str) -> list[Path]:
         """Restore backups for a package and drop it from state."""
         records = self._load_state()
         record = next((r for r in records if r.name == name), None)
@@ -1420,6 +1526,28 @@ class Loader:
                 )
 
         restored: list[Path] = []
+        appended = [entry for entry in record.backups if entry.get("mode") == "appended-resource"]
+        # Validate all appended-resource ownership before changing any TOC row.
+        if appended:
+            from .forge import ForgeArchive, Oodle
+            for entry in appended:
+                forge_path = self.game_dir / entry.get("forge", "")
+                if not forge_path.is_file():
+                    raise LoaderError(f"Cannot safely remove '{name}': {forge_path.name} is missing.")
+                archive = ForgeArchive(forge_path, Oodle(self.game_dir))
+                resource_id = int(str(entry["resource_id"]), 0)
+                current_offset, current_length = archive.read_toc_row(resource_id)
+                expected = (int(entry["installed_offset"]), int(entry["installed_length"]))
+                if (current_offset, current_length) != expected:
+                    raise LoaderError(
+                        f"Cannot safely remove '{name}': resource 0x{resource_id:016X} "
+                        "was changed by another tool."
+                    )
+                current = archive.read_at(*expected)
+                if hashlib.sha256(current).hexdigest() != entry.get("installed_sha256"):
+                    raise LoaderError(
+                        f"Cannot safely remove '{name}': appended resource bytes changed."
+                    )
         for backup in record.backups:
             if backup.get("mode") == "loose-file":
                 destination = str(backup.get("dest", ""))
@@ -1476,6 +1604,19 @@ class Loader:
                         hook_path.unlink()
                 continue
 
+            if backup.get("mode") == "appended-resource":
+                from .forge import ForgeArchive, Oodle
+                forge_path = self.game_dir / backup.get("forge", "")
+                archive = ForgeArchive(forge_path, Oodle(self.game_dir))
+                resource_id = int(str(backup["resource_id"]), 0)
+                archive.repoint_toc(
+                    resource_id,
+                    int(backup["original_offset"]),
+                    int(backup["original_length"]),
+                )
+                restored.append(forge_path)
+                continue
+
             forge_path = self.game_dir / backup.get("forge", "")
             if not forge_path.is_file():
                 continue
@@ -1492,6 +1633,20 @@ class Loader:
                 handle.seek(int(offset))
                 handle.write(original)
             restored.append(forge_path)
+        # Reclaim one contiguous appended tail after every owned resource has
+        # been detached. This mirrors the texture journal and keeps the stock
+        # archive byte-for-byte sized after disabling the package.
+        by_forge: dict[str, list[dict]] = {}
+        for entry in appended:
+            by_forge.setdefault(str(entry.get("forge", "")), []).append(entry)
+        for forge_name, entries in by_forge.items():
+            forge_path = self.game_dir / forge_name
+            start = min(int(entry["installed_offset"]) for entry in entries)
+            end = max(int(entry["installed_offset"]) + int(entry["installed_length"]) for entry in entries)
+            total = sum(int(entry["installed_length"]) for entry in entries)
+            if forge_path.stat().st_size == end and total == end - start:
+                with forge_path.open("r+b") as handle:
+                    handle.truncate(start)
         self._save_state(remaining)
         return restored
 
@@ -1503,18 +1658,7 @@ class Loader:
         by the manager and visible in the list, but none of its writes remain
         active in the game.
         """
-        records = self._load_state()
-        record = next((item for item in records if item.name == name), None)
-        if record is None:
-            return []
-
-        restored = self.remove(name)
-        record.enabled = False
-        record.backups = []
-        remaining = self._load_state()
-        remaining.append(record)
-        self._save_state(remaining)
-        return restored
+        return self.remove(name, keep_disabled=True)
 
 
 # Build a minimal FORGE TOC reader that the installer can use for future

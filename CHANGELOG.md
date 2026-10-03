@@ -1,5 +1,84 @@
 # Changelog
 
+## 0.1.7 Beta — cannon PNG alpha repair 2026-09-15
+
+- Reviewed cannon PNG imports now replace RGB colour while retaining the
+  original game alpha channel separately at every mip level. Previously an
+  opaque editor PNG replaced near-zero cannon alpha with 255.
+- Updating an enabled cannon pack reads original pixels from validated restore
+  records, not from the already-patched game texture. Update previews use that
+  same baseline without deploying anything.
+- The fix is scoped to reviewed cannon PNG mappings; explicit DDS imports,
+  outfits, sails, crew and normal/surface maps keep their existing behavior.
+- Added synthetic original-baseline, damaged-backup and per-mip alpha tests.
+  The local Silver Black Cannons set was re-encoded and checked against the
+  original alpha data. Visual confirmation in-game is still required.
+
+## 0.1.7 Beta — sail override repair 2026-09-15
+
+- Sail texture deployment now also patches matching resources in installed
+  boot patch and renderer archives, which can override the base archive.
+- Each archive has its own restore journal and backups. Enabling, disabling,
+  uninstalling and failed-install rollback include those sail copies.
+- Patch-archive plans are checked before reverting a working deployment;
+  missing/incomplete override journals no longer count as fully deployed.
+- Added an explicit base-only deployment repair that leaves the base archive,
+  installed library, outfits and DLL/ASI mods alone. Do not downgrade to an older
+  manager while a multi-archive sail deployment is active: restore it first
+  using this version so all archive journals are handled.
+- Synthetic deployment/rollback regressions pass; in-game appearance still
+  requires equipping the selected vanilla sail cosmetic and checking visually.
+
+## 0.1.7 Beta — cannon-set selection 2026-09-15
+
+- Recognized Black Cannons archives in the Mods tab now prompt for Standard,
+  Bronze, Copper, Silver or Gold weapon materials before installation.
+- Update Mod also offers the picker, retaining the previous set as its default.
+  Use Update Mod to move an existing gold-only install onto your equipped tier.
+- The supplied upper/lower cannon, mortar and swivel designs target the selected
+  set together. Base/Standard textures may also be shared by NPC ships; the
+  picker warns about this. Selecting a set does not equip or buy game upgrades.
+- Selected destinations appear in row hover details and installation logs.
+- Checked all 25 material/texture plans against the local 1.0.7 archives without
+  modifying the game. Actual appearance on each tier still needs gameplay tests.
+
+## 0.1.7 Beta — local update feedback 2026-09-15
+
+- Update Mod now inspects the replacement archive before asking for confirmation
+  in a centered, draggable Animus-styled window showing the mod name and
+  current → replacement version. Cancelling does not change the installed copy.
+- All category tables now show Version and Status. Successful updates retain an
+  Updated label, timestamp and version transition across refreshes and restarts.
+- Texture packs read versions from JSON, explicit README labels and recognized
+  Nexus download filenames. Missing versions are shown as Unknown; reinstalling
+  an identical version is identified as a reinstall, not an invented version bump.
+- Added offline update-preview and version/status persistence regression coverage.
+
+## 0.1.7 Beta — review refresh 2026-09-14
+
+- Outfit installation still deploys automatically. Validate requested texture
+  payloads before restoring the prior deployment; roll back a failed rebuild.
+- Texture checkmarks now reflect a completed deployment journal, not only saved
+  selections. Missing/incomplete deployments are shown as not deployed.
+- Journal texture changes before writing and mark the journal complete only
+  after all material updates succeed. Added four deployment regression tests.
+
+- Weapons rejects outfit packs and unidentifiable texture packs before import.
+  Archive names, nested folders and replacement metadata remain available to
+  category validation for ZIP, RAR and 7z installs.
+- Native-manifest ZIP imports are stored as `.jmod` so installed mods remain
+  discoverable after refresh/relaunch and can be disabled or uninstalled.
+- Normal startup prefers the executable's own application folder over a
+  shortcut's working directory, preventing accidental use of an older library.
+- Includes journaled appended-resource support for fixed-target crew packages,
+  with ownership checks on removal and rollback after a partial install failure.
+- Added category, native-ZIP lifecycle and appended-resource rollback regressions;
+  a single offline runner isolates generated fixtures in temporary folders.
+- Retains Steam-based launch handling for Steam Input. No third-party cheats,
+  controller drivers, game files, installed mods or Nexus API integration bundled.
+- Allows 45 seconds for Steam/Ubisoft startup and reports an unconfirmed launch
+  without claiming the game crashed when it may still be waiting on client setup.
+
 ## 0.1.7 Beta — 2026-09-03
 
 - Revalidated executable detection, all ten selectable sail materials, all

@@ -17,8 +17,8 @@ application with reversible deployment and clear conflict information.
 Download the current portable package from the
 [0.1.7 Beta release](https://github.com/jesseleehoffman82-ctrl/Animus-Mod-Manager---Assassin-s-Creed-Black-Flag-Resynced/releases/tag/v0.1.7-beta).
 
-The release was refreshed on **8 September 2026** with the matching application
-and source packages built on 7 September for **Resynced Title Update 1.0.7**.
+The release was refreshed on **14 September 2026** with matching application
+and source packages for **Resynced Title Update 1.0.7**.
 See [RELEASE-IDENTITY.md](RELEASE-IDENTITY.md) for exact filenames and SHA-256
 checksums. Earlier downloads also labelled 0.1.7 can contain different builds.
 
@@ -60,9 +60,11 @@ disabling an enabled conflict.
 
 ### Weapons
 
-Manages weapon texture replacements with the same enable, update, rename,
-restore, and uninstall workflow. Texture files are validated against the target
-material and slot before deployment.
+Manages weapon texture replacements—such as swords, pistols and blunderbusses—with
+the same enable, update, rename, restore, and uninstall workflow. Outfit packs
+are rejected here. Unidentified packs are blocked rather than assumed to be
+weapons; weapon packs need an identifying name or category metadata. Texture
+files are validated against the target material and slot before deployment.
 
 ### Crew
 
@@ -90,6 +92,11 @@ enabled mod occupying that archive. Disable the conflicting mod first; complete
 FORGE archives are not merged. The experimental Rugged Rags recolour still needs
 an in-game appearance and cosmetic-isolation test. No recolour is bundled with
 the public manager.
+
+Fixed-target packages can also supply journaled, appended resources in
+`DataPC_boot.forge`. Disable restores the original resource pointers; removal
+checks that the installed resources are still owned by that package. This is
+not an automatic merger for arbitrary full-FORGE replacement mods.
 
 ### Sails
 

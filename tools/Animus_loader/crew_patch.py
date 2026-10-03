@@ -21,11 +21,29 @@ def metadata(package):
         raise LoaderError("Invalid crew material target metadata.")
     if not isinstance(value.get("target_name"), str) or not value["target_name"].strip():
         raise LoaderError("Crew material package must name its fixed vanilla target.")
-    if len(package.targets) != 1:
-        raise LoaderError("Crew material packages must contain exactly one patch archive.")
-    target = package.targets[0]
-    if target.mode != "loose-file" or target.dest != PATCH_FILE or not target.replacement.startswith(b"scimitar"):
-        raise LoaderError("Crew material packages may only deploy a valid boot patch FORGE.")
+    legacy_patch = (
+        len(package.targets) == 1
+        and package.targets[0].mode == "loose-file"
+        and package.targets[0].dest == PATCH_FILE
+        and package.targets[0].replacement.startswith(b"scimitar")
+    )
+    appended_materials = bool(package.targets) and all(
+        target.mode == "appended-resource"
+        and target.forge == "DataPC_boot.forge"
+        and target.resource_id
+        # Crew packs can contain both BMS material containers and raw external
+        # texture-mip resources. Each blob is still size/hash checked by the
+        # package loader and its stock source is checked below.
+        and bool(target.replacement)
+        for target in package.targets
+    )
+    if not legacy_patch and not appended_materials:
+        raise LoaderError(
+            "Crew material packages must use a valid boot patch FORGE or "
+            "journaled DataPC_boot material resources."
+        )
+    if appended_materials and len({target.resource_id for target in package.targets}) != len(package.targets):
+        raise LoaderError("Crew material package contains duplicate resource targets.")
     checks = value.get("source_resources")
     if not isinstance(checks, list) or not 1 <= len(checks) <= 256:
         raise LoaderError("Crew material package lacks source-resource compatibility checks.")
@@ -84,6 +102,14 @@ def package_source(source, _depth=0):
 def preflight(loader, package):
     """No writes: validate source build, ownership, and conflicts before apply."""
     meta = metadata(package)
+    legacy_patch = (
+        len(package.targets) == 1
+        and package.targets[0].mode == "loose-file"
+        and package.targets[0].dest == PATCH_FILE
+    )
+    appended_materials = bool(package.targets) and all(
+        target.mode == "appended-resource" for target in package.targets
+    )
     installed = loader.list_installed()
     destinations = {str(t.dest or t.forge).casefold() for t in package.targets}
     # Protect active crew patch archives even when another package is installed
@@ -97,14 +123,18 @@ def preflight(loader, package):
                 raise LoaderError(f"'{record.name}' already uses this patch archive. Disable it first; crew material archives cannot be merged.")
     if meta is None:
         return
-    path = loader._safe_game_path(PATCH_FILE)
     owner = next((r for r in installed if r.name == package.name and r.enabled), None)
-    if path.exists():
+    path = loader._safe_game_path(PATCH_FILE)
+    if legacy_patch and path.exists():
         entries = owner.backups if owner else []
         expected = next((e.get("installed_sha256") for e in entries if e.get("dest") == PATCH_FILE), None)
         if not expected or hashlib.sha256(path.read_bytes()).hexdigest() != expected:
             raise LoaderError(f"{PATCH_FILE} already exists or was changed outside the manager. It was not overwritten. Remove/restore its existing mod first.")
-    validate_source_resources(loader, package)
+    # An active journaled package temporarily changes its own source hashes.
+    # Loader.apply removes it immediately after this preflight, restoring the
+    # originals before applying the update.
+    if not (owner and appended_materials):
+        validate_source_resources(loader, package)
 
 
 def validate_source_resources(loader, package):
