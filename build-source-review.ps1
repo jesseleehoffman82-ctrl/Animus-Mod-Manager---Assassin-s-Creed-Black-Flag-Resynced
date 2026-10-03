@@ -56,11 +56,15 @@ Get-ChildItem -LiteralPath (Join-Path $projectRoot "tools") -File -Filter "test_
     Copy-Item -Destination (Join-Path $stage "tools")
 Copy-Item -LiteralPath (Join-Path $projectRoot "tools\run_regressions.py") -Destination (Join-Path $stage "tools")
 Copy-Item -LiteralPath (Join-Path $projectRoot "tools\audit_release.py") -Destination (Join-Path $stage "tools")
+Copy-Item -LiteralPath (Join-Path $projectRoot "tools\test_update_ui.js") -Destination (Join-Path $stage "tools")
 New-Item -ItemType Directory -Force -Path (Join-Path $stage "tools\startup_tests") | Out-Null
 Copy-Item -LiteralPath (Join-Path $projectRoot "tools\startup_tests\StartupTests.csproj") -Destination (Join-Path $stage "tools\startup_tests")
 Copy-Item -LiteralPath (Join-Path $projectRoot "tools\startup_tests\Program.cs") -Destination (Join-Path $stage "tools\startup_tests")
 
 foreach ($document in @(
+    "LICENSE",
+    "README.md",
+    "BUILDING.md",
     "CHANGELOG.md",
     "build-public-beta.ps1",
     "build-nexus-clean.ps1",
@@ -69,6 +73,8 @@ foreach ($document in @(
     "SOURCE-CODE.txt",
     "REVIEW-NOTES.md",
     "VALIDATION-2026-09-14.md",
+    "VALIDATION-2026-10-03.md",
+    "VALIDATION-SAIL-ORIENTATION-2026-09-17.md",
     "GAME-COMPATIBILITY.md",
     "PUBLIC-BETA-README.md",
     "NEXUS-PORTABLE-README.md",

@@ -15,7 +15,7 @@ identify the archives supplied for review.
   working directory, preserving the intended installation's library.
 - Fixed-target crew packages support journaled appended resources with removal
   ownership checks and rollback testing. No crew mod payload is bundled.
-- Run `py -3.14 tools/run_regressions.py` for the ten offline regression suites.
+- Run `py -3.14 tools/run_regressions.py` for the 17 offline regression suites.
 
 - No Nexus account, API key, GraphQL, OAuth, SSO or download integration is included.
 - WebView navigation and native messages are restricted to the local interface;

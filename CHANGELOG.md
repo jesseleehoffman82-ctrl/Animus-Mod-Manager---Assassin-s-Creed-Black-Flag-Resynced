@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.1.7 Beta â€” refreshed 2026-10-03
+
+- Disable and uninstall now preflight loose-file ownership and restore backups
+  before removal. Mid-operation failures restore files and library state.
+- Failed outfit/weapon/crew/sail rebuilds no longer silently leave a pack marked
+  disabled. Locked package folders do not remove the item from the library.
+- Removed texture packs are moved out of the active package directory into
+  recovery storage and do not return to the list after restarting.
+- Includes the September cannon alpha/target selection and sail override fixes.
+- Editable sail PNGs now receive one vertical orientation correction before
+  encoding; native DDS imports are unchanged. Texture boundary checks cover
+  reviewed sail resources in both base and patch archives.
+- Seventeen offline regression suites and packaged-source integrity checks are
+  used for this refresh. These are not a guarantee of every mod's compatibility.
+
+
 ## 0.1.7 Beta — cannon PNG alpha repair 2026-09-15
 
 - Reviewed cannon PNG imports now replace RGB colour while retaining the

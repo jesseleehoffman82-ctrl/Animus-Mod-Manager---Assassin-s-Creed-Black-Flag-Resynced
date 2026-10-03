@@ -17,7 +17,7 @@ application with reversible deployment and clear conflict information.
 Download the current portable package from the
 [0.1.7 Beta release](https://github.com/jesseleehoffman82-ctrl/Animus-Mod-Manager---Assassin-s-Creed-Black-Flag-Resynced/releases/tag/v0.1.7-beta).
 
-The release was refreshed on **14 September 2026** with matching application
+The release was refreshed on **3 October 2026** with matching application
 and source packages for **Resynced Title Update 1.0.7**.
 See [RELEASE-IDENTITY.md](RELEASE-IDENTITY.md) for exact filenames and SHA-256
 checksums. Earlier downloads also labelled 0.1.7 can contain different builds.
@@ -155,6 +155,10 @@ manager. Uninstalling restores its files and removes it from the library.
 - External mip writes and repointed material data are journaled.
 - Original bytes are backed up before a write is made.
 - Enabled texture packs are rebuilt from a known vanilla baseline.
+- Failed disable/uninstall operations roll back their changes instead of
+  leaving a partially removed mod or an incorrect enabled state.
+- Uninstalled texture packs leave the active library; their files are retained
+  separately for recovery and are not rediscovered as installed packs.
 - Game-update detection avoids restoring stale material pointers over a newly
   updated Ubisoft archive.
 - Animus patches files on disk; it does not inject its own code into the running
@@ -173,8 +177,9 @@ operations work locally without an internet connection.
 - Assassin's Creed IV: Black Flag Resynced
 - Microsoft .NET 10 Desktop Runtime x64
 - Microsoft Edge WebView2 Runtime
-- PNG conversion supports compatible BC1/BC3 targets; BC7 targets require a
-  game-ready DDS.
+- PNG conversion supports reviewed BC1/BC3/BC7 targets using the bundled texture
+  converter. Editable sail PNGs receive the required orientation correction;
+  game-ready DDS files retain their existing orientation.
 - Script hooks and ASI mods may require updates whenever Ubisoft changes the
   executable. File management cannot repair an outdated binary hook.
 - Spanish sails currently remain excluded from selectable targets because they

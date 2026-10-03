@@ -155,6 +155,7 @@ Copy-Item -LiteralPath (Join-Path $projectRoot "PUBLIC-BETA-README.md") `
     -Destination (Join-Path $stage "README.md")
 Copy-Item -LiteralPath (Join-Path $projectRoot "CHANGELOG.md") -Destination $stage
 Copy-Item -LiteralPath (Join-Path $projectRoot "THIRD-PARTY-NOTICES.md") -Destination $stage
+Copy-Item -LiteralPath (Join-Path $projectRoot "LICENSE") -Destination $stage
 Copy-Item -LiteralPath (Join-Path $projectRoot "NEXUS-SECURITY-NOTES.txt") -Destination $stage
 $Version | Set-Content -LiteralPath (Join-Path $stage "VERSION.txt") -Encoding ascii
 
